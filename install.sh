@@ -155,7 +155,7 @@ ensure_docker() {
         return 1
         ;;
     esac
-    for i in $(seq 1 30); do
+    for _ in $(seq 1 30); do
       if docker info >/dev/null 2>&1; then
         ok "Docker daemon is now running"
         return 0
@@ -195,7 +195,7 @@ EOF
         elif command -v service >/dev/null 2>&1; then
           sudo service docker start 2>/dev/null || true
         fi
-        for i in $(seq 1 30); do
+        for _ in $(seq 1 30); do
           if docker info >/dev/null 2>&1; then
             started="1"
             break
@@ -224,7 +224,7 @@ EOF
       fi
       open -a Docker 2>/dev/null || true
       log "Docker Desktop installed. Waiting for it to start..."
-      for i in $(seq 1 60); do
+      for _ in $(seq 1 60); do
         if docker info >/dev/null 2>&1; then
           started="1"
           break
