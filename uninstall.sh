@@ -51,21 +51,19 @@ else
   DC=()
 fi
 
-# Stop containers (if compose available)
-if [[ ${#DC[@]} -gt 0 ]]; then
-  if docker info >/dev/null 2>&1; then
-    echo "Stopping Hermes Docker stack..."
-    if [[ "$REMOVE_DATA" == "1" ]]; then
-      "${DC[@]}" down -v --remove-orphans 2>&1 || true
+  # Stop containers (if compose available)
+  if [[ ${#DC[@]} -gt 0 ]]; then
+    if docker info >/dev/null 2>&1; then
+      echo "Stopping Hermes Docker stack..."
+      if [[ "$REMOVE_DATA" == "1" ]]; then
+        "${DC[@]}" down -v --remove-orphans 2>&1 || true
+      else
+        "${DC[@]}" down --remove-orphans 2>&1 || true
+      fi
     else
-      "${DC[@]}" down --remove-orphans 2>&1 || true
+      echo "WARN: Docker daemon is not running. Skipping container shutdown."
     fi
-  else
-    echo "WARN: Docker daemon is not running. Skipping container shutdown."
-    echo "Start Docker first, then re-run uninstall, or manually:"
-    echo "  rm -rf $INSTALL_DIR"
   fi
-fi
 
 # Remove files
 if [[ "$REMOVE_FILES" == "1" ]]; then
@@ -75,8 +73,8 @@ else
   echo "Stopped Hermes Docker stack. Files kept at: $INSTALL_DIR"
   echo ""
   echo "To remove data volume too:"
-  echo "  REMOVE_DATA=1 $0"
+  echo "  $0 --remove-data"
   echo ""
   echo "To remove all files too:"
-  echo "  REMOVE_FILES=1 $0"
+  echo "  $0 --remove-files"
 fi

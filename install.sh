@@ -205,12 +205,17 @@ EOF
       fi
       ;;
     macos)
+      local arch; arch="$(uname -m 2>/dev/null || echo x86_64)"
+      local dmg_arch="amd64"
+      if [[ "$arch" == "arm64" ]]; then
+        dmg_arch="arm64"
+      fi
       if require_cmd brew; then
         brew install --cask docker
       else
         log "Homebrew not found. Downloading Docker Desktop..."
         local dmg="/tmp/Docker.dmg"
-        curl -L -o "$dmg" "https://desktop.docker.com/mac/main/amd64/Docker.dmg" || {
+        curl -L -o "$dmg" "https://desktop.docker.com/mac/main/${dmg_arch}/Docker.dmg" || {
           warn "Download failed. Install Docker Desktop manually."
           warn "  https://docs.docker.com/desktop/install/mac-install/"
           return 1
@@ -396,6 +401,10 @@ make_env() {
   esac
 
   if [[ ! -f .env || "$FORCE" == "1" ]]; then
+    if [[ -f .env ]]; then
+      log "Backing up existing .env to .env.bak"
+      cp .env .env.bak
+    fi
     if [[ -z "$api_key" && "$NONINTERACTIVE" != "1" ]]; then
       prompt_default api_key "API key for provider '$PROVIDER'" "" 1
     fi
@@ -506,28 +515,31 @@ API_SERVER_KEY="${API_SERVER_KEY:-change-me}"
 API_SERVER_PORT="${API_SERVER_PORT:-8642}"
 CUSTOM_BASE_URL="${CUSTOM_BASE_URL:-}"
 
-cat > "$HERMES_HOME/.env" <<EOENV
+if [[ ! -f "$HERMES_HOME/.env" ]]; then
+  cat > "$HERMES_HOME/.env" <<EOENV
 API_SERVER_KEY=$API_SERVER_KEY
 GATEWAY_ALLOW_ALL_USERS=true
 PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
 EOENV
 
-# Write only the relevant provider key(s)
-case "$MODEL_PROVIDER" in
-  openrouter) echo "OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
-  anthropic)  echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
-  openai)     echo "OPENAI_API_KEY=${OPENAI_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
-  google)
-    echo "GOOGLE_API_KEY=${GOOGLE_API_KEY:-}" >> "$HERMES_HOME/.env"
-    echo "GEMINI_API_KEY=${GEMINI_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
-  deepseek)   echo "DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
-  custom)
-    echo "CUSTOM_API_KEY=${CUSTOM_API_KEY:-}" >> "$HERMES_HOME/.env"
-    echo "CUSTOM_BASE_URL=${CUSTOM_BASE_URL:-}" >> "$HERMES_HOME/.env" ;;
-esac
-chmod 600 "$HERMES_HOME/.env" || true
+  # Write only the relevant provider key(s)
+  case "$MODEL_PROVIDER" in
+    openrouter) echo "OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
+    anthropic)  echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
+    openai)     echo "OPENAI_API_KEY=${OPENAI_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
+    google)
+      echo "GOOGLE_API_KEY=${GOOGLE_API_KEY:-}" >> "$HERMES_HOME/.env"
+      echo "GEMINI_API_KEY=${GEMINI_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
+    deepseek)   echo "DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
+    custom)
+      echo "CUSTOM_API_KEY=${CUSTOM_API_KEY:-}" >> "$HERMES_HOME/.env"
+      echo "CUSTOM_BASE_URL=${CUSTOM_BASE_URL:-}" >> "$HERMES_HOME/.env" ;;
+  esac
+  chmod 600 "$HERMES_HOME/.env" || true
+fi
 
-cat > "$HERMES_HOME/config.yaml" <<EOCFG
+if [[ ! -f "$HERMES_HOME/config.yaml" ]]; then
+  cat > "$HERMES_HOME/config.yaml" <<EOCFG
 model:
   provider: "$MODEL_PROVIDER"
   default: "$MODEL_NAME"
@@ -554,9 +566,10 @@ platforms:
       key: "$API_SERVER_KEY"
 EOCFG
 
-for tool in terminal file web browser vision skills memory session_search delegation cronjob todo; do
-  hermes tools enable "$tool" >/dev/null 2>&1 || true
-done
+  for tool in terminal file web browser vision skills memory session_search delegation cronjob todo; do
+    hermes tools enable "$tool" >/dev/null 2>&1 || true
+  done
+fi
 
 exec "$@"
 EOF

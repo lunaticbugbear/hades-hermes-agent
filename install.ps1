@@ -308,6 +308,13 @@ New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $InstallDir 'workspace') | Out-Null
 Set-Location $InstallDir
 
+if ($Force) {
+  if (Test-Path '.env') {
+    Log 'Backing up existing .env to .env.bak'
+    Copy-Item '.env' '.env.bak' -Force
+  }
+}
+
 Safe-Write '.env' @"
 COMPOSE_PROJECT_NAME=$ProjectName
 MODEL_PROVIDER=$Provider
@@ -386,29 +393,32 @@ API_SERVER_KEY="${API_SERVER_KEY:-change-me}"
 API_SERVER_PORT="${API_SERVER_PORT:-8642}"
 CUSTOM_BASE_URL="${CUSTOM_BASE_URL:-}"
 
-cat > "$HERMES_HOME/.env" <<EOENV
+if [[ ! -f "$HERMES_HOME/.env" ]]; then
+  cat > "$HERMES_HOME/.env" <<EOENV
 API_SERVER_KEY=$API_SERVER_KEY
 GATEWAY_ALLOW_ALL_USERS=true
 PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
 EOENV
 
-# Write only the relevant provider key
-case "$MODEL_PROVIDER" in
-  openrouter) echo "OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
-  anthropic)  echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
-  openai)     echo "OPENAI_API_KEY=${OPENAI_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
-  google)
-    echo "GOOGLE_API_KEY=${GOOGLE_API_KEY:-}" >> "$HERMES_HOME/.env"
-    echo "GEMINI_API_KEY=${GEMINI_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
-  deepseek)   echo "DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
-  custom)
-    echo "CUSTOM_API_KEY=${CUSTOM_API_KEY:-}" >> "$HERMES_HOME/.env"
-    echo "CUSTOM_BASE_URL=${CUSTOM_BASE_URL:-}" >> "$HERMES_HOME/.env" ;;
-esac
+  # Write only the relevant provider key
+  case "$MODEL_PROVIDER" in
+    openrouter) echo "OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
+    anthropic)  echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
+    openai)     echo "OPENAI_API_KEY=${OPENAI_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
+    google)
+      echo "GOOGLE_API_KEY=${GOOGLE_API_KEY:-}" >> "$HERMES_HOME/.env"
+      echo "GEMINI_API_KEY=${GEMINI_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
+    deepseek)   echo "DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
+    custom)
+      echo "CUSTOM_API_KEY=${CUSTOM_API_KEY:-}" >> "$HERMES_HOME/.env"
+      echo "CUSTOM_BASE_URL=${CUSTOM_BASE_URL:-}" >> "$HERMES_HOME/.env" ;;
+  esac
 
-chmod 600 "$HERMES_HOME/.env" || true
+  chmod 600 "$HERMES_HOME/.env" || true
+fi
 
-cat > "$HERMES_HOME/config.yaml" <<EOCFG
+if [[ ! -f "$HERMES_HOME/config.yaml" ]]; then
+  cat > "$HERMES_HOME/config.yaml" <<EOCFG
 model:
   provider: "$MODEL_PROVIDER"
   default: "$MODEL_NAME"
@@ -435,9 +445,10 @@ platforms:
       key: "$API_SERVER_KEY"
 EOCFG
 
-for tool in terminal file web browser vision skills memory session_search delegation cronjob todo; do
-  hermes tools enable "$tool" >/dev/null 2>&1 || true
-done
+  for tool in terminal file web browser vision skills memory session_search delegation cronjob todo; do
+    hermes tools enable "$tool" >/dev/null 2>&1 || true
+  done
+fi
 
 exec "$@"
 '@
