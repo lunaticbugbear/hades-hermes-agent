@@ -1,8 +1,14 @@
 # Hermes Agent Docker Installer
 
 <p align="center">
-  <strong>Run Hermes Agent in Docker with one installer.</strong><br>
-  Clean host. Persistent workspace. Local API server. Linux, macOS, WSL, Git Bash, and Windows PowerShell.
+  <pre>
+   __                            __
+  / /  ___  ____ _  ___  ___ ___/ /__  ____  ___ ___
+ / _ \/ _ \/ __/  \/ -_)(_-</  _  / _ \/ __/  \/ -_)__
+/_//_/\___/_/ /_/\_/\__//___/\_,_/\___/\__/_/\_/\__/(_)
+  </pre>
+  <strong>Run Hermes Agent in Docker with one command.</strong><br>
+  Isolated host. Persistent state. Local API server. Support Linux, macOS, WSL, and Windows.
 </p>
 
 <p align="center">
@@ -14,18 +20,53 @@
 
 ---
 
+## Architecture & Data Flow
+
+```text
+               +-------------------------------------------------+
+               |                   HOST SYSTEM                   |
+               |                                                 |
+               |  ~/.hermes-docker/                              |
+               |  ├── .env  (API Keys, Port, Config)             |
+               |  ├── docker-compose.yml                         |
+               |  │                                              |
+               |  ├── workspace/  <======= Bind Mount ========>  |
+               |  |                                           |  |
+               +--|-------------------------------------------|--+
+                  |                                           |
+                  |                  Virtual                  |
+                  |                  Network                  |
+                  |                                           |
++-----------------|-------------------------------------------|--+
+|                 v                                           v  |
+|     [ Container: hermes ]                           /workspace |
+|                                                                |
+|     - Runs: hermes gateway run                                 |
+|     - API Server: 127.0.0.1:8642 (Host Port)                   |
+|                                                                |
+|     /root/.hermes  <========== Named Volume ==========>        |
+|                                                     |          |
++-----------------------------------------------------|----------+
+                                                      v
+                                            [ Volume: hermes_home ]
+                                            - config.yaml & .env
+                                            - sessions/ (transcripts)
+                                            - memory/ & skills/
+```
+
+---
+
 ## Why this exists
 
 Hermes Agent is powerful, but local setup can get messy: Python versions, system packages, browser tooling, API keys, and platform differences.
 
 This repo gives you a clean Docker-based install flow:
 
-- install Hermes Agent inside a Docker image
-- keep host Python untouched
-- generate `.env`, Dockerfile, Compose file, bootstrap script, healthcheck, helper CLI, and workspace
-- persist Hermes state in a Docker volume
-- expose the Hermes API server on `127.0.0.1` by default
-- support OpenRouter, Anthropic, OpenAI, Google/Gemini, DeepSeek, and custom OpenAI-compatible endpoints
+- **Isolated Runtime**: Keep host Python and package dependencies untouched.
+- **Zero Configuration**: Automatically generates `.env`, Dockerfile, Compose file, bootstrap, healthcheck, and workspace.
+- **State Persistence**: State (memory, skills, sessions) is stored in a dedicated Docker volume.
+- **Local API Gateway**: Exposes the local Hermes API server on `127.0.0.1` by default for desktop clients.
+- **Flexible Providers**: Support OpenRouter, Anthropic, OpenAI, Google/Gemini, DeepSeek, and custom OpenAI-compatible endpoints.
 
 ---
 
@@ -90,11 +131,11 @@ Default install directory:
 
 Runtime layout:
 
-| Host | Container | Purpose |
+| Host Path | Container Path | Purpose |
 |---|---|---|
-| `~/.hermes-docker/workspace` | `/workspace` | files Hermes works on |
+| `~/.hermes-docker/workspace` | `/workspace` | Files and projects Hermes works on |
 | Docker volume `hermes_home` | `/root/.hermes` | Hermes config, sessions, memory |
-| `127.0.0.1:8642` | container API port | local Hermes API server |
+| `127.0.0.1:8642` | Port 8642 | Local Hermes API server |
 
 ---
 
@@ -104,14 +145,14 @@ Linux / macOS / WSL:
 
 ```bash
 cd ~/.hermes-docker
-./bin/hermes-docker start
-./bin/hermes-docker cli
-./bin/hermes-docker logs
-./bin/hermes-docker status
-./bin/hermes-docker shell
-./bin/hermes-docker update
-./bin/hermes-docker url
-./bin/hermes-docker key
+./bin/hermes-docker start     # Start stack in background
+./bin/hermes-docker cli       # Open interactive Hermes CLI
+./bin/hermes-docker logs      # View gateway logs
+./bin/hermes-docker status    # Check container status
+./bin/hermes-docker shell     # Exec bash inside container
+./bin/hermes-docker update    # Rebuild & restart stack
+./bin/hermes-docker url       # Get API url
+./bin/hermes-docker key       # Get API Server auth key
 ```
 
 Windows PowerShell:
