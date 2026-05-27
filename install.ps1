@@ -206,15 +206,32 @@ if ($SkipBuild) {
 # ── Uninstall ───────────────────────────────────────────────────
 
 if ($Uninstall) {
-  if (-not (Test-Command 'docker')) { Die 'Docker not found.' }
-  docker info *> $null
-  if ($LASTEXITCODE -ne 0) { Die 'Docker daemon is not running.' }
+  if (-not (Test-Path $InstallDir)) {
+    Warn "Install directory not found: $InstallDir"
+    Warn 'Nothing to uninstall.'
+    exit 0
+  }
 
-  docker compose down --remove-orphans *> $null
-  Log 'Stack stopped. Files kept at: $InstallDir'
-  $ans = Read-Host 'Remove data volume too? (y/N)'
-  if ($ans -match '^(y|yes)$') { docker compose down -v --remove-orphans; Ok 'Removed stack and data volume' }
-  else { Ok 'Removed stack, kept data volume' }
+  $dockerAvailable = $false
+  if (Test-Command 'docker') {
+    docker info *> $null
+    if ($LASTEXITCODE -eq 0) { $dockerAvailable = $true }
+    else { Warn 'Docker daemon is not running. Skipping stack shutdown.' }
+  } else {
+    Warn 'Docker not found. Skipping stack shutdown.'
+  }
+
+  if ($dockerAvailable) {
+    Push-Location $InstallDir
+    docker compose down --remove-orphans *> $null
+    Log "Stack stopped. Files kept at: $InstallDir"
+    $ans = Read-Host 'Remove data volume too? (y/N)'
+    if ($ans -match '^(y|yes)$') { docker compose down -v --remove-orphans; Ok 'Removed stack and data volume' }
+    else { Ok 'Removed stack, kept data volume' }
+    Pop-Location
+  } else {
+    Warn "Files kept at: $InstallDir"
+  }
   exit 0
 }
 
