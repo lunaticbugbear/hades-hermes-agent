@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Generate files without build
         run: |
-          HERMES_NONINTERACTIVE=1 OPENROUTER_API_KEY=dummy-test-key-123456789 bash install.sh --skip-build --no-browser --force --dir "$RUNNER_TEMP/hermes-docker-ci"
+          HERMES_NONINTERACTIVE=1 OPENROUTER_API_KEY=dummy-...6789 bash install.sh --skip-build --no-browser --force --dir "$RUNNER_TEMP/hermes-docker-ci"
       - name: Validate compose config
         working-directory: ${{ runner.temp }}/hermes-docker-ci
         run: docker compose config
@@ -76,3 +76,39 @@ jobs:
           if grep -R "lunaticbugbear/hermes-docker-installer" README.md; then
             echo "::warning::README points to lunaticbugbear. If you forked the repo, replace with your URL."
           fi
+
+  smoke:
+    name: Docker build + smoke test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate files
+        run: |
+          HERMES_NONINTERACTIVE=1 OPENROUTER_API_KEY=dummy-...6789 bash install.sh --skip-build --no-browser --force --dir "$RUNNER_TEMP/hermes-smoke"
+      - name: Build Docker image
+        working-directory: ${{ runner.temp }}/hermes-smoke
+        run: docker compose build --progress=plain 2>&1
+      - name: Start container
+        working-directory: ${{ runner.temp }}/hermes-smoke
+        run: |
+          docker compose up -d
+          docker compose ps
+      - name: Healthcheck wait
+        run: |
+          echo "Waiting for Hermes API..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8642/health >/dev/null 2>&1; then
+              echo "API is healthy!"
+              curl -s http://localhost:8642/health
+              exit 0
+            fi
+            echo "  attempt $i/30..."
+            sleep 4
+          done
+          echo "Healthcheck failed after 120s"
+          exit 1
+      - name: Cleanup
+        if: always()
+        working-directory: ${{ runner.temp }}/hermes-smoke
+        run: docker compose down -v 2>/dev/null || true

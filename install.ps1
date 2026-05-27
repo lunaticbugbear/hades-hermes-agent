@@ -1,7 +1,7 @@
 # Hermes Agent Docker Public Installer for Windows PowerShell
 # Requires Docker Desktop with WSL2 backend enabled.
 # Usage:
-#   powershell -ExecutionPolicy Bypass -File .\install.ps1
+#   .\install.ps1
 #   .\install.ps1 -Provider openrouter -Model deepseek/deepseek-v4-flash:free -OpenRouterApiKey sk-...
 
 param(
@@ -12,10 +12,11 @@ param(
   [int]$Port = 8642,
   [string]$ProjectName = 'hermes-agent',
   [switch]$NoStart,
-  [switch]$NoBrowser,
+  [switch]$Browser,
   [switch]$SkipBuild,
   [switch]$Force,
   [switch]$Uninstall,
+  [string]$HermesVersion = if ($env:HERMES_VERSION) { $env:HERMES_VERSION } else { 'main' },
   [string]$OpenRouterApiKey = $env:OPENROUTER_API_KEY,
   [string]$AnthropicApiKey = $env:ANTHROPIC_API_KEY,
   [string]$OpenAIApiKey = $env:OPENAI_API_KEY,
@@ -34,17 +35,6 @@ function Warn($msg) { Write-Host "WARN: $msg" -ForegroundColor Yellow }
 function Die($msg) { Write-Host "ERROR: $msg" -ForegroundColor Red; exit 1 }
 function Test-Command($cmd) { return [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
 
-function ComposeArgs() {
-  docker compose version *> $null
-  if ($LASTEXITCODE -eq 0) { return @('compose') }
-  if (Test-Command 'docker-compose') { return @() }
-  Die 'Docker Compose v2 not found. Install Docker Desktop.'
-}
-
-function Run-Compose([string[]]$Args) {
-  docker compose @Args
-}
-
 function New-SecretHex() {
   $bytes = New-Object byte[] 24
   [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
@@ -62,8 +52,10 @@ function Safe-Write($Path, $Content) {
 }
 
 function Test-PortInUse([int]$Port) {
-  $conn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
-  return [bool]$conn
+  try {
+    $conn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop
+    return [bool]$conn
+  } catch { return $false }
 }
 
 function Resolve-Port() {
@@ -89,6 +81,8 @@ function Wait-Health() {
   docker compose logs --tail 80 hermes
 }
 
+# ── Preflight ──────────────────────────────────────────────────
+
 Log 'Hermes Docker Installer for Windows'
 
 if (-not (Test-Command 'docker')) {
@@ -101,18 +95,22 @@ if ($LASTEXITCODE -ne 0) {
 }
 Ok 'Docker is ready'
 
-New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-New-Item -ItemType Directory -Force -Path (Join-Path $InstallDir 'workspace') | Out-Null
-Set-Location $InstallDir
+# ── Uninstall ───────────────────────────────────────────────────
 
 if ($Uninstall) {
-  Run-Compose @('down')
-  $ans = Read-Host 'Remove data volume too? This deletes config/sessions/memory [y/N]'
-  if ($ans -match '^(y|yes)$') { Run-Compose @('down','-v') }
+  if (-not (Test-Command 'docker')) { Die 'Docker not found.' }
+  docker info *> $null
+  if ($LASTEXITCODE -ne 0) { Die 'Docker daemon is not running.' }
+
+  docker compose down --remove-orphans *> $null
+  Log 'Stack stopped. Files kept at: $InstallDir'
+  $ans = Read-Host 'Remove data volume too? (y/N)'
+  if ($ans -match '^(y|yes)$') { docker compose down -v --remove-orphans; Ok 'Removed stack and data volume' }
+  else { Ok 'Removed stack, kept data volume' }
   exit 0
 }
 
-Resolve-Port
+# ── Interactive setup ───────────────────────────────────────────
 
 if (-not $PSBoundParameters.ContainsKey('Provider')) {
   Write-Host ''
@@ -137,6 +135,8 @@ if (-not $PSBoundParameters.ContainsKey('Provider')) {
   $modelInput = Read-Host "Model [$Model]"
   if ($modelInput) { $Model = $modelInput }
 }
+
+Resolve-Port
 
 if (-not $ApiServerKey) { $ApiServerKey = New-SecretHex }
 
@@ -167,7 +167,13 @@ switch ($Provider) {
   'custom' { $cKey=$selectedKey }
 }
 
-$installBrowser = if ($NoBrowser) { '0' } else { '1' }
+$installBrowser = if ($Browser) { '1' } else { '0' }
+
+# ── Generate files ──────────────────────────────────────────────
+
+New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $InstallDir 'workspace') | Out-Null
+Set-Location $InstallDir
 
 Safe-Write '.env' @"
 COMPOSE_PROJECT_NAME=$ProjectName
@@ -176,37 +182,60 @@ MODEL_NAME=$Model
 API_SERVER_PORT=$Port
 API_SERVER_KEY=$ApiServerKey
 INSTALL_BROWSER=$installBrowser
-OPENROUTER_API_KEY=$orKey
-ANTHROPIC_API_KEY=$anthKey
-OPENAI_API_KEY=$oaKey
-GOOGLE_API_KEY=$gKey
-GEMINI_API_KEY=$gemKey
-DEEPSEEK_API_KEY=$dsKey
-CUSTOM_API_KEY=$cKey
-CUSTOM_BASE_URL=$CustomBaseUrl
+HERMES_VERSION=$HermesVersion
+# Provider keys. Fill only the provider you use.
+$(if ($orKey) { "OPENROUTER_API_KEY=$orKey" })
+$(if ($anthKey) { "ANTHROPIC_API_KEY=$anthKey" })
+$(if ($oaKey) { "OPENAI_API_KEY=$oaKey" })
+$(if ($gKey) { "GOOGLE_API_KEY=$gKey" })
+$(if ($gemKey) { "GEMINI_API_KEY=$gemKey" })
+$(if ($dsKey) { "DEEPSEEK_API_KEY=$dsKey" })
+$(if ($cKey) { "CUSTOM_API_KEY=$cKey" })
+$(if ($CustomBaseUrl) { "CUSTOM_BASE_URL=$CustomBaseUrl" })
 "@
 
 Safe-Write 'Dockerfile' @'
+# Stage 1: Builder — install Hermes + Python deps
+FROM python:3.12-slim-bookworm AS builder
+ARG INSTALL_BROWSER=1
+ARG HERMES_VERSION=main
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git ca-certificates build-essential python3-dev pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 --branch $HERMES_VERSION \
+    https://github.com/NousResearch/hermes-agent.git /src/hermes && \
+    python3 -m venv /venv && \
+    /venv/bin/pip install --no-cache-dir -U pip setuptools wheel && \
+    /venv/bin/pip install --no-cache-dir '/src/hermes[all]' && \
+    rm -rf /src/hermes /root/.cache /tmp/*
+
+# Stage 2: Runtime
 FROM python:3.12-slim-bookworm
 ARG INSTALL_BROWSER=1
 ENV DEBIAN_FRONTEND=noninteractive \
     HERMES_HOME=/root/.hermes \
-    PATH=/root/.hermes/hermes-agent/venv/bin:/root/.local/bin:$PATH \
+    PATH=/venv/bin:/root/.local/bin:$PATH \
     PYTHONUNBUFFERED=1
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash ca-certificates curl git build-essential python3 python3-dev python3-pip python3-venv \
-    pkg-config tmux cron jq ripgrep fd-find procps less nano openssh-client netcat-openbsd \
+    bash ca-certificates curl tmux cron jq ripgrep fd-find \
+    procps less nano openssh-client netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
-RUN curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
+
+COPY --from=builder /venv /venv
+
 RUN if [ "$INSTALL_BROWSER" = "1" ]; then \
-      /root/.hermes/hermes-agent/venv/bin/python -m pip install --upgrade pip playwright && \
-      /root/.hermes/hermes-agent/venv/bin/python -m playwright install --with-deps chromium; \
+      /venv/bin/pip install --no-cache-dir playwright && \
+      /venv/bin/python -m playwright install --with-deps chromium; \
     fi
+
 COPY bootstrap.sh /usr/local/bin/bootstrap.sh
 COPY healthcheck.sh /usr/local/bin/healthcheck.sh
 RUN chmod +x /usr/local/bin/bootstrap.sh /usr/local/bin/healthcheck.sh
+
 WORKDIR /workspace
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 CMD /usr/local/bin/healthcheck.sh
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+    CMD /usr/local/bin/healthcheck.sh
 ENTRYPOINT ["/usr/local/bin/bootstrap.sh"]
 CMD ["hermes", "gateway", "run"]
 '@
@@ -215,40 +244,55 @@ Safe-Write 'bootstrap.sh' @'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 export HERMES_HOME="${HERMES_HOME:-/root/.hermes}"
-export PATH="/root/.hermes/hermes-agent/venv/bin:/root/.local/bin:$PATH"
+export PATH="/venv/bin:/root/.local/bin:$PATH"
 mkdir -p "$HERMES_HOME" /workspace "$HERMES_HOME/logs"
+
 MODEL_PROVIDER="${MODEL_PROVIDER:-openrouter}"
 MODEL_NAME="${MODEL_NAME:-deepseek/deepseek-v4-flash:free}"
 API_SERVER_KEY="${API_SERVER_KEY:-change-me}"
 API_SERVER_PORT="${API_SERVER_PORT:-8642}"
 CUSTOM_BASE_URL="${CUSTOM_BASE_URL:-}"
+
 cat > "$HERMES_HOME/.env" <<EOENV
-OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-OPENAI_API_KEY=${OPENAI_API_KEY:-}
-GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
-GEMINI_API_KEY=${GEMINI_API_KEY:-}
-DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
-CUSTOM_API_KEY=${CUSTOM_API_KEY:-}
 API_SERVER_KEY=$API_SERVER_KEY
 GATEWAY_ALLOW_ALL_USERS=true
 PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
 EOENV
+
+# Write only the relevant provider key
+case "$MODEL_PROVIDER" in
+  openrouter) echo "OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
+  anthropic)  echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
+  openai)     echo "OPENAI_API_KEY=${OPENAI_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
+  google)
+    echo "GOOGLE_API_KEY=${GOOGLE_API_KEY:-}" >> "$HERMES_HOME/.env"
+    echo "GEMINI_API_KEY=${GEMINI_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
+  deepseek)   echo "DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}" >> "$HERMES_HOME/.env" ;;
+  custom)
+    echo "CUSTOM_API_KEY=${CUSTOM_API_KEY:-}" >> "$HERMES_HOME/.env"
+    echo "CUSTOM_BASE_URL=${CUSTOM_BASE_URL:-}" >> "$HERMES_HOME/.env" ;;
+esac
+
 chmod 600 "$HERMES_HOME/.env" || true
+
 cat > "$HERMES_HOME/config.yaml" <<EOCFG
 model:
   provider: "$MODEL_PROVIDER"
   default: "$MODEL_NAME"
   base_url: "$CUSTOM_BASE_URL"
+
 terminal:
   backend: local
   cwd: /workspace
   timeout: 180
+
 memory:
   memory_enabled: true
   user_profile_enabled: true
+
 approvals:
   mode: manual
+
 platforms:
   api_server:
     enabled: true
@@ -257,15 +301,26 @@ platforms:
       port: $API_SERVER_PORT
       key: "$API_SERVER_KEY"
 EOCFG
-for tool in terminal file web browser vision skills memory session_search delegation cronjob todo; do hermes tools enable "$tool" >/dev/null 2>&1 || true; done
+
+for tool in terminal file web browser vision skills memory session_search delegation cronjob todo; do
+  hermes tools enable "$tool" >/dev/null 2>&1 || true
+done
+
 exec "$@"
 '@
 
 Safe-Write 'healthcheck.sh' @'
 #!/usr/bin/env bash
+# Hermes Docker Healthcheck
 set -euo pipefail
 PORT="${API_SERVER_PORT:-8642}"
-curl -fsS --max-time 5 "http://127.0.0.1:${PORT}/health" >/dev/null || exit 1
+if command -v curl >/dev/null 2>&1; then
+  curl -fsS --max-time 5 "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1
+elif command -v nc >/dev/null 2>&1; then
+  nc -z 127.0.0.1 "$PORT" >/dev/null 2>&1
+else
+  exec 3<>/dev/tcp/127.0.0.1/"$PORT" 2>/dev/null
+fi
 '@
 
 Safe-Write 'docker-compose.yml' @'
@@ -274,7 +329,8 @@ services:
     build:
       context: .
       args:
-        INSTALL_BROWSER: ${INSTALL_BROWSER:-1}
+        INSTALL_BROWSER: ${INSTALL_BROWSER:-0}
+        HERMES_VERSION: ${HERMES_VERSION:-main}
     image: local/hermes-agent:latest
     container_name: hermes-agent
     env_file:
@@ -288,6 +344,7 @@ services:
     tty: true
     restart: unless-stopped
     command: ["hermes", "gateway", "run"]
+
 volumes:
   hermes_home:
 '@
@@ -308,8 +365,8 @@ switch ($Command) {
   'update' { docker compose build --pull; docker compose up -d }
   'down' { docker compose down }
   'reset' { docker compose down -v }
-  'url' { $envfile=Get-Content .env; ($envfile | ? {$_ -like 'API_SERVER_PORT=*'}) -replace 'API_SERVER_PORT=','' | % { "http://localhost:$_" } }
-  'key' { (Get-Content .env | ? {$_ -like 'API_SERVER_KEY=*'}) -replace 'API_SERVER_KEY=','' }
+  'url' { $envfile=Get-Content .env; ($envfile | Where-Object {$_ -like 'API_SERVER_PORT=*'}) -replace 'API_SERVER_PORT=','' | ForEach-Object { "http://localhost:$_" } }
+  'key' { (Get-Content .env | Where-Object {$_ -like 'API_SERVER_KEY=*'}) -replace 'API_SERVER_KEY=','' }
   default { Write-Host 'Commands: start stop restart status logs cli shell build update down reset url key' }
 }
 '@
@@ -334,12 +391,18 @@ Edit config/API keys:
     $InstallDir\.env
 "@
 
+# ── Build and start ─────────────────────────────────────────────
+
 if ($SkipBuild) {
   Log 'Generated files only; skipping Docker build/start.'
   docker compose config | Out-Null
   Ok 'Docker Compose config is valid'
 } else {
-  Log 'Building Docker image. First build can take 5-15 minutes...'
+  if ($Browser) {
+    Log 'Building Docker image with Playwright/Chromium (may take 5-10 minutes)...'
+  } else {
+    Log 'Building Docker image. Add -Browser for Playwright/Chromium (~450 MB extra, default: skip).'
+  }
   docker compose build
   if (-not $NoStart) {
     docker compose up -d
