@@ -4,15 +4,11 @@
 #   .\install.ps1
 #   .\install.ps1 -Provider openrouter -Model deepseek/deepseek-v4-flash:free -OpenRouterApiKey sk-...
 
-# Guard against environment leakage
-if ($env:PYTHONPATH) { Remove-Item env:PYTHONPATH -ErrorAction SilentlyContinue }
-if ($env:PYTHONHOME) { Remove-Item env:PYTHONHOME -ErrorAction SilentlyContinue }
-
-$isAdmin = [bool](([System.Security.Principal.WindowsPrincipal][System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))
-$defaultDir = if ($isAdmin) { Join-Path $env:ProgramFiles 'omnipod' } else { "$env:USERPROFILE\.omnipod" }
-
 param(
-  [string]$InstallDir = $defaultDir,
+  [string]$InstallDir = $(
+    $isAdmin = [bool](([System.Security.Principal.WindowsPrincipal][System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))
+    if ($isAdmin) { Join-Path $env:ProgramFiles 'omnipod' } else { "$env:USERPROFILE\.omnipod" }
+  ),
   [ValidateSet('openrouter','anthropic','openai','google','deepseek','custom')]
   [string]$Provider = 'openrouter',
   [string]$Model = 'deepseek/deepseek-v4-flash:free',
@@ -34,6 +30,11 @@ param(
   [string]$ApiServerKey = $env:API_SERVER_KEY
 )
 
+# Guard against environment leakage
+if ($env:PYTHONPATH) { Remove-Item env:PYTHONPATH -ErrorAction SilentlyContinue }
+if ($env:PYTHONHOME) { Remove-Item env:PYTHONHOME -ErrorAction SilentlyContinue }
+
+$isAdmin = [bool](([System.Security.Principal.WindowsPrincipal][System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))
 $ErrorActionPreference = 'Stop'
 
 function Log($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
