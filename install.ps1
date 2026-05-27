@@ -16,7 +16,7 @@ param(
   [switch]$SkipBuild,
   [switch]$Force,
   [switch]$Uninstall,
-  [string]$HermesVersion = if ($env:HERMES_VERSION) { $env:HERMES_VERSION } else { 'main' },
+  [string]$HermesVersion = $(if ($env:HERMES_VERSION) { $env:HERMES_VERSION } else { 'main' }),
   [string]$OpenRouterApiKey = $env:OPENROUTER_API_KEY,
   [string]$AnthropicApiKey = $env:ANTHROPIC_API_KEY,
   [string]$OpenAIApiKey = $env:OPENAI_API_KEY,

@@ -358,7 +358,7 @@ preflight() {
         warn "Open Docker Desktop from Start Menu and enable WSL2 backend."
         ;;
     esac
-    for i in $(seq 1 30); do
+    for _ in $(seq 1 30); do
       if docker info >/dev/null 2>&1; then
         ok "Docker daemon is now running"
         break

@@ -85,7 +85,7 @@ jobs:
           test -f uninstall.ps1
       - name: No stale installer flags in docs/CI
         run: |
-          if grep -R -- '--no-browser' README.md CHANGELOG.md .github/workflows/ci.yml install.sh install.ps1; then
+          if grep -R -- '--no-browser' README.md CHANGELOG.md install.sh install.ps1; then
             echo 'Found stale --no-browser flag; use --browser opt-in instead.'
             exit 1
           fi
