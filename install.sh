@@ -25,8 +25,21 @@
 set -Eeuo pipefail
 IFS=$' \n\t'
 
-VERSION="1.1.2"
-DEFAULT_DIR="$HOME/.omnipod"
+# Guard against environment leakage
+if [ -n "${PYTHONPATH:-}" ]; then
+  unset PYTHONPATH
+fi
+if [ -n "${PYTHONHOME:-}" ]; then
+  unset PYTHONHOME
+fi
+
+VERSION="1.1.3"
+DEFAULT_DIR=""
+if [ "$(id -u)" -eq 0 ]; then
+  DEFAULT_DIR="/usr/local/lib/omnipod"
+else
+  DEFAULT_DIR="$HOME/.omnipod"
+fi
 INSTALL_DIR="$DEFAULT_DIR"
 PROJECT_NAME="omnipod"
 PROVIDER="openrouter"
@@ -68,33 +81,37 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ "$NONINTERACTIVE" != "1" && -t 0 ]]; then
-  echo
-  echo "Hermes Agent Docker installer"
-  echo "Choose your model provider:"
-  echo "  1) OpenRouter  recommended, many models"
-  echo "  2) Anthropic"
-  echo "  3) OpenAI"
-  echo "  4) Google Gemini"
-  echo "  5) DeepSeek"
-  echo "  6) Custom OpenAI-compatible endpoint"
-  printf "Provider [1]: "
-  read -r provider_choice || true
-  case "${provider_choice:-1}" in
-    1) PROVIDER="openrouter"; MODEL="${MODEL:-deepseek/deepseek-v4-flash:free}" ;;
-    2) PROVIDER="anthropic"; MODEL="claude-sonnet-4" ;;
-    3) PROVIDER="openai"; MODEL="gpt-4.1" ;;
-    4) PROVIDER="google"; MODEL="gemini-2.0-flash" ;;
-    5) PROVIDER="deepseek"; MODEL="deepseek-chat" ;;
-    6) PROVIDER="custom"; MODEL="${MODEL:-model-name}" ;;
-    *) die "Invalid provider choice: $provider_choice" ;;
-  esac
-  printf "Model [%s]: " "$MODEL"
-  read -r model_choice || true
-  MODEL="${model_choice:-$MODEL}"
-  printf "API server port [%s]: " "$API_PORT"
-  read -r port_choice || true
-  API_PORT="${port_choice:-$API_PORT}"
+if [[ "$NONINTERACTIVE" != "1" ]]; then
+  # Probe by opening /dev/tty
+  if (: </dev/tty) 2>/dev/null; then
+    exec < /dev/tty
+    echo
+    echo "Omnipod Installer"
+    echo "Choose your model provider:"
+    echo "  1) OpenRouter  recommended, many models"
+    echo "  2) Anthropic"
+    echo "  3) OpenAI"
+    echo "  4) Google Gemini"
+    echo "  5) DeepSeek"
+    echo "  6) Custom OpenAI-compatible endpoint"
+    printf "Provider [1]: "
+    read -r provider_choice || true
+    case "${provider_choice:-1}" in
+      1) PROVIDER="openrouter"; MODEL="${MODEL:-deepseek/deepseek-v4-flash:free}" ;;
+      2) PROVIDER="anthropic"; MODEL="claude-sonnet-4" ;;
+      3) PROVIDER="openai"; MODEL="gpt-4.1" ;;
+      4) PROVIDER="google"; MODEL="gemini-2.0-flash" ;;
+      5) PROVIDER="deepseek"; MODEL="deepseek-chat" ;;
+      6) PROVIDER="custom"; MODEL="${MODEL:-model-name}" ;;
+      *) die "Invalid provider choice: $provider_choice" ;;
+    esac
+    printf "Model [%s]: " "$MODEL"
+    read -r model_choice || true
+    MODEL="${model_choice:-$MODEL}"
+    printf "API server port [%s]: " "$API_PORT"
+    read -r port_choice || true
+    API_PORT="${port_choice:-$API_PORT}"
+  fi
 fi
 
 case "$PROVIDER" in
@@ -270,16 +287,21 @@ prompt_default() {
     printf -v "$var_name" '%s' "$default"
     return
   fi
-  if [[ "$secret" == "1" ]]; then
-    printf "%s [%s]: " "$label" "press enter to skip"
-    read -r -s value || true
-    printf "\n"
+  if (: </dev/tty) 2>/dev/null; then
+    exec < /dev/tty
+    if [[ "$secret" == "1" ]]; then
+      printf "%s [%s]: " "$label" "press enter to skip"
+      read -r -s value || true
+      printf "\n"
+    else
+      printf "%s [%s]: " "$label" "$default"
+      read -r value || true
+    fi
+    value="${value:-$default}"
+    printf -v "$var_name" '%s' "$value"
   else
-    printf "%s [%s]: " "$label" "$default"
-    read -r value || true
+    printf -v "$var_name" '%s' "$default"
   fi
-  value="${value:-$default}"
-  printf -v "$var_name" '%s' "$value"
 }
 
 random_hex() {
@@ -306,13 +328,16 @@ resolve_port() {
       die "Port $API_PORT is already in use. Re-run with --port <free-port>."
     fi
     warn "Port $API_PORT is already in use."
-    for candidate in 8643 8644 18642 28642; do
-      if ! port_in_use "$candidate"; then
-        printf "Use free port %s instead? [Y/n]: " "$candidate"
-        read -r ans || true
-        case "${ans:-Y}" in y|Y|yes|YES) API_PORT="$candidate"; ok "Using port $API_PORT"; return ;; esac
-      fi
-    done
+    if (: </dev/tty) 2>/dev/null; then
+      exec < /dev/tty
+      for candidate in 8643 8644 18642 28642; do
+        if ! port_in_use "$candidate"; then
+          printf "Use free port %s instead? [Y/n]: " "$candidate"
+          read -r ans || true
+          case "${ans:-Y}" in y|Y|yes|YES) API_PORT="$candidate"; ok "Using port $API_PORT"; return ;; esac
+        fi
+      done
+    fi
     die "Choose a free port with --port <port>."
   fi
 }
@@ -667,6 +692,75 @@ EOF
     chmod +x bin/omnipod
   fi
 
+  # Shell configuration & Path setup (Nous-Style)
+  if [ "$(id -u)" -eq 0 ]; then
+    if [ ! -L "/usr/local/bin/omnipod" ]; then
+      ln -sf "$INSTALL_DIR/bin/omnipod" "/usr/local/bin/omnipod"
+      ok "Linked omnipod to /usr/local/bin/omnipod"
+    fi
+  else
+    local command_link_dir="$HOME/.local/bin"
+    mkdir -p "$command_link_dir"
+    ln -sf "$INSTALL_DIR/bin/omnipod" "$command_link_dir/omnipod"
+    
+    if ! echo "$PATH" | tr ':' '\n' | grep -q "^$command_link_dir$"; then
+      local shell_configs=()
+      local is_fish=false
+      local login_shell
+      login_shell="$(basename "${SHELL:-/bin/bash}")"
+      case "$login_shell" in
+        zsh)
+          [ -f "$HOME/.zshrc" ] && shell_configs+=("$HOME/.zshrc")
+          [ -f "$HOME/.zprofile" ] && shell_configs+=("$HOME/.zprofile")
+          if [ ${#shell_configs[@]} -eq 0 ]; then
+            touch "$HOME/.zshrc"
+            shell_configs+=("$HOME/.zshrc")
+          fi
+          ;;
+        bash)
+          [ -f "$HOME/.bashrc" ] && shell_configs+=("$HOME/.bashrc")
+          [ -f "$HOME/.bash_profile" ] && shell_configs+=("$HOME/.bash_profile")
+          ;;
+        fish)
+          is_fish=true
+          local fish_config="$HOME/.config/fish/config.fish"
+          mkdir -p "$(dirname "$fish_config")"
+          touch "$fish_config"
+          ;;
+        *)
+          [ -f "$HOME/.bashrc" ] && shell_configs+=("$HOME/.bashrc")
+          [ -f "$HOME/.zshrc" ] && shell_configs+=("$HOME/.zshrc")
+          ;;
+      esac
+      [ "$is_fish" = "false" ] && [ -f "$HOME/.profile" ] && shell_configs+=("$HOME/.profile")
+
+      # shellcheck disable=SC2016
+      local path_line='export PATH="$HOME/.local/bin:$PATH"'
+      for config_file in "${shell_configs[@]}"; do
+        if ! grep -v '^[[:space:]]*#' "$config_file" 2>/dev/null | grep -qE 'PATH=.*\.local/bin'; then
+          {
+            echo ""
+            echo "# Omnipod Installer - ensure ~/.local/bin is on PATH"
+            echo "$path_line"
+          } >> "$config_file"
+          ok "Added ~/.local/bin to PATH in $config_file"
+        fi
+      done
+
+      if [ "$is_fish" = "true" ]; then
+        if ! grep -q 'fish_add_path.*\.local/bin' "$fish_config" 2>/dev/null; then
+          {
+            echo ""
+            echo "# Omnipod Installer - ensure ~/.local/bin is on PATH"
+            # shellcheck disable=SC2016
+            echo 'fish_add_path "$HOME/.local/bin"'
+          } >> "$fish_config"
+          ok "Added ~/.local/bin to PATH in $fish_config"
+        fi
+      fi
+    fi
+  fi
+
   if safe_write README.md; then
     cat > README.md <<EOF
 # Omnipod
@@ -750,10 +844,23 @@ build_and_start() {
     return
   fi
   log "Building Docker image. Add --browser for Playwright/Chromium (~450 MB extra, default: skip)."
-  $COMPOSE build
+  
+  local build_log
+  build_log="$(mktemp 2>/dev/null || echo "/tmp/omnipod-build.$$.log")"
+  if ! $COMPOSE build > "$build_log" 2>&1; then
+    err "Failed to build Docker images."
+    err "Build logs:"
+    sed 's/^/    /' "$build_log" >&2
+    rm -f "$build_log"
+    exit 1
+  fi
+  rm -f "$build_log"
+
   if [[ "$START_AFTER_INSTALL" == "1" ]]; then
     log "Starting Hermes gateway/API server..."
-    $COMPOSE up -d
+    if ! $COMPOSE up -d; then
+      die "Failed to start container stack."
+    fi
     sleep 3
     $COMPOSE ps
     wait_for_health || true
@@ -783,9 +890,14 @@ uninstall() {
     warn "Kept Docker volume. To remove data: cd $INSTALL_DIR && $c down -v --remove-orphans"
     return
   fi
-  printf "Remove Hermes Docker data volume too? This deletes config/sessions/memory. [y/N]: "
-  read -r ans || true
-  case "$ans" in y|Y|yes|YES) $c down -v --remove-orphans; ok "Removed stack and data volume" ;; *) ok "Removed stack, kept data volume" ;; esac
+  if (: </dev/tty) 2>/dev/null; then
+    exec < /dev/tty
+    printf "Remove Hermes Docker data volume too? This deletes config/sessions/memory. [y/N]: "
+    read -r ans || true
+    case "$ans" in y|Y|yes|YES) $c down -v --remove-orphans; ok "Removed stack and data volume" ;; *) ok "Removed stack, kept data volume" ;; esac
+  else
+    warn "Kept Docker volume (non-interactive). To remove data: cd $INSTALL_DIR && $c down -v --remove-orphans"
+  fi
 }
 
 main() {

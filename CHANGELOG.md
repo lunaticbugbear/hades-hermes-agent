@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.3 (2026-05-28)
+- Upgraded installer robustness to NousResearch-grade standards.
+- Added environment isolation guards (`PYTHONPATH`, `PYTHONHOME`) to prevent builder shadowing.
+- Switched interactive prompts to use raw TTY descriptor probes (`/dev/tty`), supporting piping via `curl | bash` safely.
+- Added FHS install layout directory logic for `root` installations (`/usr/local/lib/omnipod` + `/usr/local/bin`).
+- Integrated automatic login shell detection (`bash`, `zsh`, `fish`) and PATH registration for bin helpers.
+- Added path registration and `omnipod.cmd` wrapper script support for Windows environments.
+- Implemented temporary log capture for Docker builds to report failures cleanly instead of silent aborts.
+
 ## 1.1.2 (2026-05-27)
 - Fixed installer `--uninstall` / `-Uninstall` so it never bootstraps Docker before uninstall checks.
 - Bound generated API port to `127.0.0.1` by default.

@@ -4,8 +4,15 @@
 #   .\install.ps1
 #   .\install.ps1 -Provider openrouter -Model deepseek/deepseek-v4-flash:free -OpenRouterApiKey sk-...
 
+# Guard against environment leakage
+if ($env:PYTHONPATH) { Remove-Item env:PYTHONPATH -ErrorAction SilentlyContinue }
+if ($env:PYTHONHOME) { Remove-Item env:PYTHONHOME -ErrorAction SilentlyContinue }
+
+$isAdmin = [bool](([System.Security.Principal.WindowsPrincipal][System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))
+$defaultDir = if ($isAdmin) { Join-Path $env:ProgramFiles 'omnipod' } else { "$env:USERPROFILE\.omnipod" }
+
 param(
-  [string]$InstallDir = "$env:USERPROFILE\.omnipod",
+  [string]$InstallDir = $defaultDir,
   [ValidateSet('openrouter','anthropic','openai','google','deepseek','custom')]
   [string]$Provider = 'openrouter',
   [string]$Model = 'deepseek/deepseek-v4-flash:free',
@@ -308,6 +315,20 @@ New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $InstallDir 'workspace') | Out-Null
 Set-Location $InstallDir
 
+# Register Path environment variable
+$binPath = Join-Path $InstallDir 'bin'
+New-Item -ItemType Directory -Force -Path $binPath | Out-Null
+
+$targetEnvScope = if ($isAdmin) { 'Machine' } else { 'User' }
+$currentPaths = [System.Environment]::GetEnvironmentVariable('Path', $targetEnvScope)
+if ($currentPaths -notlike "*$binPath*") {
+  $separator = if ($currentPaths.EndsWith(';') -or $currentPaths -eq '') { '' } else { ';' }
+  [System.Environment]::SetEnvironmentVariable('Path', "$currentPaths$separator$binPath", $targetEnvScope)
+  # Update local process Path
+  $env:Path = "$env:Path;$binPath"
+  Ok "Added $binPath to $targetEnvScope Path environment variable"
+}
+
 if ($Force) {
   if (Test-Path '.env') {
     Log 'Backing up existing .env to .env.bak'
@@ -492,10 +513,10 @@ volumes:
   hermes_home:
 '@
 
-Safe-Write 'omnipod.ps1' @'
+Safe-Write 'bin/omnipod.ps1' @'
 param([string]$Command='help')
 $ErrorActionPreference='Stop'
-Set-Location $PSScriptRoot
+Set-Location (Split-Path $PSScriptRoot -Parent)
 switch ($Command) {
   'start' { docker compose up -d }
   'stop' { docker compose stop }
@@ -514,16 +535,21 @@ switch ($Command) {
 }
 '@
 
+Safe-Write 'bin/omnipod.cmd' @"
+@echo off
+powershell -ExecutionPolicy Bypass -File "%~dp0omnipod.ps1" %*
+"@
+
 Safe-Write 'README.md' @"
 # Omnipod
 
 Commands:
 
-    .\omnipod.ps1 start
-    .\omnipod.ps1 cli
-    .\omnipod.ps1 logs
-    .\omnipod.ps1 status
-    .\omnipod.ps1 update
+    omnipod start
+    omnipod cli
+    omnipod logs
+    omnipod status
+    omnipod update
 
 API server:
 
@@ -560,6 +586,6 @@ if ($SkipBuild) {
 
 Ok 'Omnipod is installed.'
 Write-Host "Install directory: $InstallDir"
-Write-Host "Open CLI: cd '$InstallDir'; .\omnipod.ps1 cli"
-Write-Host "Logs: cd '$InstallDir'; .\omnipod.ps1 logs"
+Write-Host "Open CLI: omnipod cli"
+Write-Host "Logs: omnipod logs"
 Write-Host "API server: http://localhost:$Port"
