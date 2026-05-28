@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/lunaticbugbear/hermes-docker-installer/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/lunaticbugbear/hermes-docker-installer/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/lunaticbugbear/hades-hermes-agent/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/lunaticbugbear/hades-hermes-agent/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
   <img alt="Docker" src="https://img.shields.io/badge/runtime-Docker-2496ED">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%20%7C%20WSL-blueviolet">
@@ -26,20 +26,20 @@
 
 Hermes Agent is powerful. Getting it running locally is not — Python version conflicts, Chromium dependency chains, shell PATH juggling, provider credential plumbing.
 
-Hades wraps all of that into one installer command. The host stays clean. State survives rebuilds. You get a single control surface: `hades`.
+HADES wraps all of that into one installer command. The host stays clean. State survives rebuilds. You get a single control surface: `hades`.
 
 ## Install
 
 **Linux / macOS / WSL**
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/lunaticbugbear/hermes-docker-installer/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.sh)
 ```
 
 **Windows (PowerShell)**
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/lunaticbugbear/hermes-docker-installer/main/install.ps1' -OutFile install.ps1; .\install.ps1"
+powershell -ExecutionPolicy Bypass -c "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.ps1' -OutFile install.ps1; .\install.ps1"
 ```
 
 The installer walks you through provider, API key, model, and port. Done in under a minute.

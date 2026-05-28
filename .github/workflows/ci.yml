@@ -114,12 +114,12 @@ jobs:
           fi
       - name: Public install URLs are present
         run: |
-          grep -q 'raw.githubusercontent.com/lunaticbugbear/hermes-docker-installer/main/install.sh' README.md
-          grep -q 'raw.githubusercontent.com/lunaticbugbear/hermes-docker-installer/main/install.ps1' README.md
-      - name: Repo standards are documented
+          grep -q 'raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.sh' README.md
+          grep -q 'raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.ps1' README.md
+      - name: Core docs are linked from README
         run: |
-          grep -q '## Quality gates' README.md
-          grep -q '## Repository standards' README.md
+          grep -q '## CI' README.md
+          grep -q '## Docs' README.md
           grep -q 'docs/ARCHITECTURE.md' README.md
           grep -q 'docs/OPERATIONS.md' README.md
           grep -q 'docs/RELEASE_PROCESS.md' README.md
