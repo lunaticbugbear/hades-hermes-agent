@@ -1,28 +1,30 @@
-<p align="center">
-  <pre>
-                                                   _   _    _    ____  _____ ____
-                                                  | | | |  / \  |  _ \| ____/ ___|
-                                                  | |_| | / _ \ | | | |  _| \___ \
-                                                  |  _  |/ ___ \| |_| | |___ ___) |
-                                                  |_| |_/_/   \_\____/|_____|____/
-  </pre>
-</p>
+# HADES
 
-<p align="center">
-  <strong>Hermes Agent Docker Environment Script</strong><br>
-  Isolated workspace. Persistent state. One command. Linux, macOS, WSL, Windows.
-</p>
+<div align="center">
 
-<p align="center">
-  <a href="https://github.com/lunaticbugbear/hades-hermes-agent/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/lunaticbugbear/hades-hermes-agent/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
-  <img alt="Docker" src="https://img.shields.io/badge/runtime-Docker-2496ED">
-  <img alt="Platforms" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%20%7C%20WSL-blueviolet">
-</p>
+<pre>
+ _   _    _    ____  _____ ____
+| | | |  / \  |  _ \| ____/ ___|
+| |_| | / _ \ | | | |  _| \___ \
+|  _  |/ ___ \| |_| | |___ ___) |
+|_| |_/_/   \_\____/|_____|____/
+</pre>
 
-<p align="center">
-  <img src="assets/demo.svg" alt="HADES Terminal Demo" width="700">
-</p>
+<strong>Hermes Agent Docker Environment Script</strong><br>
+Isolated workspace. Persistent state. One command. Linux, macOS, WSL, Windows.
+
+<br>
+
+<a href="https://github.com/lunaticbugbear/hades-hermes-agent/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/lunaticbugbear/hades-hermes-agent/actions/workflows/ci.yml/badge.svg"></a>
+<a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
+<img alt="Docker" src="https://img.shields.io/badge/runtime-Docker-2496ED">
+<img alt="Platforms" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%20%7C%20WSL-blueviolet">
+
+<br><br>
+
+<img src="assets/demo.svg" alt="HADES Terminal Demo" width="700">
+
+</div>
 
 ---
 
@@ -65,11 +67,11 @@ bash <(curl -fsSL https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-
 powershell -ExecutionPolicy Bypass -c "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.ps1' -OutFile install.ps1; .\install.ps1"
 
 # Or download and inspect first:
-# Invoke-WebRequest -Uri '...' -OutFile install.ps1
+# Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.ps1' -OutFile install.ps1
 # .\install.ps1
 ```
 
-The installer walks you through provider, API key, model, and port. Done in under a minute.
+The interactive setup flow usually takes about a minute. First-time image builds may take longer depending on Docker, network speed, and whether browser tooling is enabled.
 
 ## Quick reference
 
@@ -85,7 +87,10 @@ hades down           # stop + remove networks
 hades reset          # nuclear: wipe everything
 ```
 
-Full command table and all flags: [docs/OPERATIONS.md](docs/OPERATIONS.md)
+More details:
+- helper commands are available via `hades help`
+- installer flags: `bash install.sh --help` or `Get-Help .\install.ps1`
+- maintainer runbook: [docs/OPERATIONS.md](docs/OPERATIONS.md)
 
 ## Providers
 
