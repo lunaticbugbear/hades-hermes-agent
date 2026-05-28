@@ -11,7 +11,9 @@ Isolated workspace. Persistent state. One command. Linux, macOS, WSL, Windows.
 
 <br><br>
 
-<img src="assets/demo.svg" alt="HADES Terminal Demo" width="700">
+<img src="assets/hades-install.svg" alt="HADES Terminal Install Screenshot" width="750">
+<br>
+<img src="assets/hades-status.svg" alt="HADES Terminal Status Screenshot" width="650">
 
 </div>
 

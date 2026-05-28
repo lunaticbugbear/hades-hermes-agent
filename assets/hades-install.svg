@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 320" width="750" height="320">
+  <style>
+    .bg { fill: #0d1117; stroke: #30363d; stroke-width: 1px; }
+    .text { font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace; font-size: 14px; fill: #c9d1d9; }
+    .cmd { fill: #58a6ff; font-weight: bold; }
+    .prompt { fill: #3fb950; font-weight: bold; }
+    .accent { fill: #f0883e; }
+    .dim { fill: #8b949e; }
+  </style>
+  <rect width="750" height="320" rx="8" class="bg"/>
+  <circle cx="20" cy="20" r="6" fill="#ff5f56"/>
+  <circle cx="40" cy="20" r="6" fill="#ffbd2e"/>
+  <circle cx="60" cy="20" r="6" fill="#27c93f"/>
+  
+  <text x="20" y="55" class="text"><tspan class="prompt">$</tspan> <tspan class="cmd">bash &lt;(curl -fsSL https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.sh)</tspan></text>
+  <text x="20" y="85" class="text">┌────────────────────────────────────────────────────────┐</text>
+  <text x="20" y="105" class="text">│ <tspan class="accent">HADES</tspan> - Hermes Agent Docker Installer                  │</text>
+  <text x="20" y="125" class="text">└────────────────────────────────────────────────────────┘</text>
+  
+  <text x="20" y="155" class="text">Select AI Provider:</text>
+  <text x="20" y="175" class="text">  1) openrouter    3) openai        5) deepseek</text>
+  <text x="20" y="195" class="text">  2) anthropic     4) google        6) custom</text>
+  
+  <text x="20" y="225" class="text"><tspan class="prompt">&gt;</tspan> <tspan class="accent">1</tspan></text>
+  <text x="20" y="245" class="text">Enter OPENROUTER_API_KEY:</text>
+  <text x="20" y="265" class="text"><tspan class="prompt">&gt;</tspan> <tspan class="accent">sk-or-v1-****************************************</tspan></text>
+  <text x="20" y="285" class="text dim">[+] Checking dependencies...</text>
+  <text x="20" y="305" class="text dim">    Docker is running.</text>
+</svg>
