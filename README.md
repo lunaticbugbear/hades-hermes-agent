@@ -1,15 +1,4 @@
 # HADES
-
-<div align="center">
-
-<pre>
- _   _    _    ____  _____ ____
-| | | |  / \  |  _ \| ____/ ___|
-| |_| | / _ \ | | | |  _| \___ \
-|  _  |/ ___ \| |_| | |___ ___) |
-|_| |_/_/   \_\____/|_____|____/
-</pre>
-
 <strong>Hermes Agent Docker Environment Script</strong><br>
 Isolated workspace. Persistent state. One command. Linux, macOS, WSL, Windows.
 
