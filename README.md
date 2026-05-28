@@ -30,18 +30,32 @@ Hermes Agent is powerful. Getting it running locally is not — Python version c
 
 HADES wraps all of that into one installer command. The host stays clean. State survives rebuilds. You get a single control surface: `hades`.
 
+## Prerequisites
+
+- **Linux**: Docker Engine + Docker Compose v2, `curl`
+- **macOS & Windows**: Docker Desktop
+- **WSL2**: Docker Desktop (WSL integration enabled)
+
 ## Install
 
 **Linux / macOS / WSL**
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.sh)
+
+# Or download and inspect first:
+# curl -fsSL https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.sh -o install.sh
+# bash install.sh
 ```
 
 **Windows (PowerShell)**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -c "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.ps1' -OutFile install.ps1; .\install.ps1"
+
+# Or download and inspect first:
+# Invoke-WebRequest -Uri '...' -OutFile install.ps1
+# .\install.ps1
 ```
 
 The installer walks you through provider, API key, model, and port. Done in under a minute.
@@ -96,7 +110,7 @@ For CI, servers, or scripted setups:
 
 ```bash
 HERMES_NONINTERACTIVE=1 \
-OPENROUTER_API_KEY=*** \
+OPENROUTER_API_KEY="sk-or-your-key-here" \
 bash install.sh --provider openrouter --model deepseek/deepseek-v4-flash:free --port 8642
 ```
 
@@ -107,16 +121,16 @@ bash install.sh --provider openrouter --model deepseek/deepseek-v4-flash:free --
 ## Architecture
 
 ```text
- HOST                                    CONTAINER
-┌────────────────────────┐     ┌─────────────────────────────┐
-│ ~/.hades/              │     │ hades                       │
-│   .env                 │     │   hermes gateway run        │
-│   docker-compose.yml   │     │   API: 127.0.0.1:8642       │
-│   workspace/  ◄────────────────► /workspace               │
-│                        │     │                              │
-└────────────────────────┘     │  /root/.hermes ◄────────────┼── volume
-                                │  (sessions, memory,         │
-                                │   skills, config)           │
+ HOST                                     CONTAINER
+┌────────────────────────┐      ┌─────────────────────────────┐
+│ ~/.hades/              │      │ hades                       │
+│   .env                 │      │   hermes gateway run        │
+│   docker-compose.yml   │      │   API: 127.0.0.1:8642       │
+│   workspace/  ◄────────┼──────┼─► /workspace                │
+│                        │      │                             │
+└────────────────────────┘      │   /root/.hermes ◄───────────┼── volume
+                                │   (sessions, memory,        │
+                                │    skills, config)          │
                                 └─────────────────────────────┘
 ```
 
