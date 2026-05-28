@@ -34,17 +34,18 @@ HADES wraps all of that into one installer command. The host stays clean. State 
 
 The installer checks for Docker automatically and will try to install or start it when possible:
 
-- **Linux**: attempts Docker Engine install if Docker is missing
+- **Linux**: attempts Docker Engine install/start
 - **macOS**: attempts Docker Desktop install/start
-- **Windows (PowerShell)**: attempts Docker Desktop install/start
-- **WSL2**: expects Docker Desktop on the Windows host with WSL integration enabled
+- **Windows PowerShell**: attempts Docker Desktop install/start
+- **WSL2 (running `install.sh` inside your distro)**: attempts Docker Engine install inside WSL
+- **Git Bash / MSYS / Cygwin on Windows**: use `install.ps1` instead
 
 You do not need to preinstall Docker manually unless automatic setup fails or your environment blocks it.
 
-You still need:
-- a supported shell (`bash` or PowerShell)
-- network access to download installer/runtime dependencies
-- an API key for your chosen model provider
+Notes:
+- The one-line Unix install command still needs `bash` and `curl` to be present before the script can start.
+- If you prefer Docker Desktop on WSL instead of a direct Docker Engine install inside the distro, use the native Windows PowerShell installer path.
+- You still need network access plus an API key for your chosen model provider.
 
 ## Install
 
