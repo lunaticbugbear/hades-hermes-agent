@@ -18,7 +18,7 @@ jobs:
     name: Shell scripts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Install shellcheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
       - name: Bash syntax
@@ -36,7 +36,7 @@ jobs:
     name: PowerShell scripts
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Parse PowerShell scripts
         shell: pwsh
         run: |
@@ -51,7 +51,7 @@ jobs:
     name: Generated Docker Compose config
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Generate files without build
         run: |
           HERMES_NONINTERACTIVE=1 OPENROUTER_API_KEY=dummy-token-123456789 bash install.sh --skip-build --force --dir "$RUNNER_TEMP/omnipod-ci"
@@ -75,7 +75,7 @@ jobs:
     name: Docs sanity
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Required files exist
         run: |
           test -f README.md
@@ -119,7 +119,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Generate files
         run: |
           HERMES_NONINTERACTIVE=1 OPENROUTER_API_KEY=dummy-token-123456789 bash install.sh --skip-build --force --dir "$RUNNER_TEMP/hermes-smoke"
