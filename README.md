@@ -376,6 +376,8 @@ Every push validates:
 - [`SECURITY.md`](SECURITY.md) — reporting guidance and hardening notes
 - [`SUPPORT.md`](SUPPORT.md) — user support expectations and intake checklist
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — community behavior baseline
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — maintainer-facing system design notes
+- [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md) — tagging and release publication flow
 - [`.editorconfig`](.editorconfig) — formatting baseline across editors
 - [`.github/CODEOWNERS`](.github/CODEOWNERS) — ownership defaults
 - [`.github/dependabot.yml`](.github/dependabot.yml) — dependency update automation

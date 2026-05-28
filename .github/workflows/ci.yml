@@ -85,6 +85,8 @@ jobs:
           test -f SUPPORT.md
           test -f CODE_OF_CONDUCT.md
           test -f CONTRIBUTING.md
+          test -f docs/ARCHITECTURE.md
+          test -f docs/RELEASE_PROCESS.md
           test -f .editorconfig
           test -f .github/CODEOWNERS
           test -f .github/dependabot.yml
@@ -113,6 +115,8 @@ jobs:
         run: |
           grep -q '## Quality gates' README.md
           grep -q '## Repository standards' README.md
+          grep -q 'docs/ARCHITECTURE.md' README.md
+          grep -q 'docs/RELEASE_PROCESS.md' README.md
 
   smoke:
     name: Docker build + smoke test

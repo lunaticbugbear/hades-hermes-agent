@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.6 (2026-05-28)
+- Added maintainer-facing architecture and release-process documentation under `docs/`.
+- Wired CI and README to enforce and reference maintainer docs.
+
 ## 1.1.5 (2026-05-28)
 - Added release automation with GitHub Releases assets and SHA256 checksums.
 - Added repository hygiene workflow to catch generated artifacts and secret-like strings.
