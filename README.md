@@ -1,8 +1,11 @@
 <div align="center">
+<br>
 
 # HADES
-<strong>Hermes Agent Docker Environment Script</strong><br>
-Isolated workspace. Persistent state. One command. Linux, macOS, WSL, Windows.
+
+### Hermes Agent Docker Environment Script
+
+**Run a stateful AI coding agent on any machine in one command.**
 
 <br>
 
@@ -11,62 +14,51 @@ Isolated workspace. Persistent state. One command. Linux, macOS, WSL, Windows.
 <img alt="Docker" src="https://img.shields.io/badge/runtime-Docker-2496ED">
 <img alt="Platforms" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%20%7C%20WSL-blueviolet">
 
-<br><br>
-
-<img src="assets/hades-install.svg" alt="HADES Terminal Install Screenshot" width="750">
 <br>
-<img src="assets/hades-status.svg" alt="HADES Terminal Status Screenshot" width="650">
+
+<img src="assets/hades-install.svg" alt="HADES install demo" width="700">
+<img src="assets/hades-status.svg" alt="HADES status demo" width="620">
 
 </div>
 
 ---
 
-Hermes Agent is powerful. Getting it running locally is not — Python version conflicts, Chromium dependency chains, shell PATH juggling, provider credential plumbing.
+## What is this?
 
-HADES wraps all of that into one installer command. The host stays clean. State survives rebuilds. You get a single control surface: `hades`.
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) is an open-source AI coding assistant by NousResearch. It can read your code, run terminal commands, browse the web, manage memory across sessions, and delegate tasks to sub-agents.
 
-## Environment notes
+Getting it running locally is painful — Python version conflicts, Chromium dependency chains, shell PATH juggling, provider credential plumbing.
 
-The installer checks for Docker automatically and will try to install or start it when possible:
+**HADES eliminates all of that.** One command installs Hermes inside an isolated Docker container with persistent state, multi-provider support, and a single `hades` control surface. The host stays clean. Sessions and memory survive rebuilds.
 
-- **Linux**: attempts Docker Engine install/start
-- **macOS**: attempts Docker Desktop install/start
-- **Windows PowerShell**: attempts Docker Desktop install/start
-- **WSL2 (running `install.sh` inside your distro)**: attempts Docker Engine install inside WSL
-- **Git Bash / MSYS / Cygwin on Windows**: use `install.ps1` instead
-
-You do not need to preinstall Docker manually unless automatic setup fails or your environment blocks it.
-
-Notes:
-- The one-line Unix install command still needs `bash` and `curl` to be present before the script can start.
-- If you prefer Docker Desktop on WSL instead of a direct Docker Engine install inside the distro, use the native Windows PowerShell installer path.
-- You still need network access plus an API key for your chosen model provider.
-
-## Install
+## Quick start
 
 **Linux / macOS / WSL**
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.sh)
-
-# Or download and inspect first:
-# curl -fsSL https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.sh -o install.sh
-# bash install.sh
 ```
 
 **Windows (PowerShell)**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -c "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.ps1' -OutFile install.ps1; .\install.ps1"
-
-# Or download and inspect first:
-# Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.ps1' -OutFile install.ps1
-# .\install.ps1
 ```
 
-The interactive setup flow usually takes about a minute. First-time image builds may take longer depending on Docker, network speed, and whether browser tooling is enabled.
+Interactive setup takes about a minute. The installer detects your OS, installs Docker if needed, prompts for your model provider and API key, builds the image, and starts the gateway.
 
-## Quick reference
+## Why HADES?
+
+| Problem | How HADES solves it |
+|---|---|
+| Python version conflicts with system packages | Isolated in Docker — host Python is untouched |
+| Chromium/Playwright dependency hell | Opt-in browser support, installed inside the container |
+| Shell PATH and environment leakage | `PYTHONPATH`/`PYTHONHOME` guards, clean `PATH` setup |
+| Losing sessions on restart | Named Docker volume persists state across rebuilds |
+| Provider key management | Interactive wizard or non-interactive env vars |
+| Security exposure | API binds to `127.0.0.1`, random bearer token, `.env` chmod 600 |
+
+## Commands
 
 ```bash
 hades start          # spin up
@@ -79,11 +71,6 @@ hades stop           # pause
 hades down           # stop + remove networks
 hades reset          # nuclear: wipe everything
 ```
-
-More details:
-- helper commands are available via `hades help`
-- installer flags: `bash install.sh --help` or `Get-Help .\install.ps1`
-- maintainer runbook: [docs/OPERATIONS.md](docs/OPERATIONS.md)
 
 ## Providers
 
@@ -98,9 +85,7 @@ More details:
 
 ## Config
 
-Edit `~/.hades/.env`, then `hades restart`. If you changed build-time settings (browser support, Hermes version pin): `hades update`.
-
-Key settings:
+Edit `~/.hades/.env`, then `hades restart`. For build-time changes (browser support, version pin): `hades update`.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -110,33 +95,6 @@ Key settings:
 | `PYTHON_VERSION` | `3.12-slim-bookworm` | Docker base image variant |
 | `GATEWAY_ALLOW_ALL_USERS` | `true` | Allow any API key to act as any user |
 | `API_SERVER_KEY` | *(generated)* | Bearer token for the API server |
-
-## Uninstalling
-
-```bash
-bash uninstall.sh                       # stop stack, keep data
-bash uninstall.sh --remove-data         # also drop the volume
-bash uninstall.sh --remove-files        # also delete ~/.hades
-bash uninstall.sh --remove-files --remove-data  # gone
-```
-
-```powershell
-.\uninstall.ps1 -RemoveFiles -RemoveData
-```
-
-## Non-interactive install
-
-For CI, servers, or scripted setups:
-
-```bash
-HERMES_NONINTERACTIVE=1 \
-OPENROUTER_API_KEY="sk-or-your-key-here" \
-bash install.sh --provider openrouter --model deepseek/deepseek-v4-flash:free --port 8642
-```
-
-```powershell
-.\install.ps1 -Provider openrouter -Model deepseek/deepseek-v4-flash:free -OpenRouterApiKey "sk-or-..." -Port 8642
-```
 
 ## Architecture
 
@@ -154,7 +112,30 @@ bash install.sh --provider openrouter --model deepseek/deepseek-v4-flash:free --
                                 └─────────────────────────────┘
 ```
 
-Workspace is bind-mounted. Hermes state lives in a named Docker volume — it survives rebuilds and restarts.
+Workspace is bind-mounted for direct file access. Hermes state (sessions, memory, skills, config) lives in a named Docker volume — it survives container rebuilds and restarts.
+
+## Non-interactive install
+
+For CI, servers, or scripted deployments:
+
+```bash
+HERMES_NONINTERACTIVE=1 \
+OPENROUTER_API_KEY="sk-or-your-key-here" \
+bash install.sh --provider openrouter --model deepseek/deepseek-v4-flash:free --port 8642
+```
+
+```powershell
+.\install.ps1 -Provider openrouter -Model deepseek/deepseek-v4-flash:free -OpenRouterApiKey "sk-or-..." -Port 8642
+```
+
+## Uninstalling
+
+```bash
+bash uninstall.sh                              # stop stack, keep data
+bash uninstall.sh --remove-data                # also drop the volume
+bash uninstall.sh --remove-files               # also delete ~/.hades
+bash uninstall.sh --remove-files --remove-data # gone
+```
 
 ## Troubleshooting
 
@@ -165,9 +146,17 @@ Workspace is bind-mounted. Hermes state lives in a named Docker volume — it su
 | Config changes not applied | `hades restart` (or `hades update` for build-time changes) |
 | Browser tools missing | `bash install.sh --browser --force` — browser is opt-in (~450 MB) |
 
-## CI
+## Built with
 
-Every push validates: bash syntax, ShellCheck, PowerShell parser, Compose config, generated helper scripts, uninstall safety, docs sanity, repo hygiene. Docker build + API health probe runs on `main`.
+- **Docker** multi-stage build (builder + slim runtime)
+- **Bash** + **PowerShell** cross-platform installers
+- **Docker Compose** for lifecycle management
+- **GitHub Actions** CI/CD — ShellCheck, PowerShell parser validation, Compose config checks, Docker build + health probe, repo hygiene, automated upstream version bumping
+- **Security-first defaults** — localhost binding, random bearer tokens, file permission hardening, environment leakage guards
+
+## CI pipeline
+
+Every push validates: bash syntax, ShellCheck, PowerShell parser, Compose config, generated helper scripts, uninstall safety, docs sanity, and repo hygiene. Docker build + API health probe runs on `main`.
 
 A daily workflow checks for new [Hermes Agent](https://github.com/NousResearch/hermes-agent) releases and opens a PR to bump the version pin automatically.
 
@@ -178,7 +167,6 @@ A daily workflow checks for new [Hermes Agent](https://github.com/NousResearch/h
 - [Release Process](docs/RELEASE_PROCESS.md) — tagging and publishing
 - [Contributing](CONTRIBUTING.md) — validation and review expectations
 - [Security](SECURITY.md) — reporting and hardening
-- [Support](SUPPORT.md) — filing useful bug reports
 
 ## License
 
