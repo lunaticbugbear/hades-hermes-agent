@@ -1,55 +1,89 @@
 <div align="center">
-<br>
 
 # HADES
 
-### Hermes Agent Docker Environment Script
+**One command. A full AI coding agent on your machine.**
 
-**Run a stateful AI coding agent on any machine in one command.**
+No Python setup. No dependency hell. No 45-minute install guides.
 
-*From 45 minutes of dependency wrangling to 60 seconds of `curl | bash`.*
-
-<br>
+```bash
+curl -fsSL https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.sh | bash
+```
 
 <a href="https://github.com/lunaticbugbear/hades-hermes-agent/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/lunaticbugbear/hades-hermes-agent?style=social"></a>
 <a href="https://github.com/lunaticbugbear/hades-hermes-agent/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/lunaticbugbear/hades-hermes-agent/actions/workflows/ci.yml/badge.svg"></a>
 <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
-<img alt="Docker" src="https://img.shields.io/badge/runtime-Docker-2496ED">
-<img alt="Platforms" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%20%7C%20WSL-blueviolet">
+<img alt="Platforms" src="https://img.shields.io/badge/Platforms-Linux%20%7C%20macOS%20%7C%20Windows%20%7C%20WSL-blueviolet">
 
-<br><br>
+**Tested across 4 platforms. Security-first defaults. Persistent memory.**
 
 </div>
 
-## What is this?
+---
 
-[Hermes Agent](https://github.com/NousResearch/hermes-agent) by NousResearch is an open-source AI coding assistant that reads your code, runs terminal commands, browses the web, remembers context across sessions, and delegates tasks to sub-agents.
+## The problem
 
-Setting it up manually requires: installing the right Python version, building Chromium from source, configuring shell paths, and wiring up provider credentials. It takes 30-45 minutes and breaks on every OS update.
+You found an open-source AI coding agent that actually works. You go to install it. The README says:
 
-**HADES wraps all of that into one command.** A single `curl | bash` installs Hermes inside an isolated Docker container with persistent state, multi-provider support, and a `hades` CLI. The host machine stays clean. Sessions and memory survive rebuilds.
+> Install Python 3.12. Build Chromium from source. Set up Playwright. Configure venv. Wire your API key. Fix the path. Fix the permissions. Fix it again after an OS update.
 
-## How it works
+45 minutes later, you are debugging pip conflicts instead of writing code.
 
-```text
-  curl | bash              hades cli
-       |                      |
-       v                      v
-   [ Install ]  --->  [ Docker Build ]  --->  [ Hermes Agent ]
-       |                      |                      |
-  Detect OS &          Multi-stage build       AI coding assistant
-  install Docker       (builder + runtime)     with memory, tools,
-  if needed                                     and web access
+## The solution
+
+HADES wraps [Hermes Agent](https://github.com/NousResearch/hermes-agent) (by NousResearch) in a single Docker container. One command installs everything. Your host machine stays clean. Sessions, memory, and config survive restarts.
+
+**Before vs After:**
+
+| Before HADES | After HADES |
+|---|---|
+| 30-45 min install, per OS | 60 seconds, any OS |
+| Python + Chromium + Playwright + venv manually | Docker handles it |
+| Config breaks on OS update | Isolated container, nothing to break |
+| API keys in shell history | `~/.hades/.env`, chmod 600, never logged |
+| Sessions lost on restart | Persistent volume survives rebuilds |
+
+---
+
+## Demo
+
+<!-- Replace with your own GIF/terminal recording -->
+```
+$ curl -fsSL https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.sh | bash
+
+  ██╗  ██╗ █████╗ ██████╗ ███████╗███████╗
+  ██║  ██║██╔══██╗██╔══██╗██╔════╝██╔════╝
+  ███████║███████║██║  ██║█████╗  ███████╗
+  ██╔══██║██╔══██║██║  ██║██╔══╝  ╚════██║
+  ██║  ██║██║  ██║██████╔╝███████╗███████║
+  ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚══════╝
+
+  Hermes Agent Docker Environment Script v1.3.0
+
+  [✓] Docker detected
+  [✓] Image pulled
+  [✓] Container running
+  [✓] API healthy on 127.0.0.1:8642
+
+  Run `hades cli` to start coding with AI.
 ```
 
-**One command. Zero host pollution. Full persistence.**
+```bash
+$ hades cli
+You: refactor this function to handle edge cases
+Hermes: I'll read the file, identify the edge cases, and refactor...
+```
+
+> **Tip:** Record your own install GIF with [asciinema](https://asciinema.org/) or [vhs](https://github.com/charmbracelet/vhs) and drop it here.
+
+---
 
 ## Quick start
 
 **Linux / macOS / WSL**
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.sh)
+curl -fsSL https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.sh | bash
 ```
 
 **Windows (PowerShell)**
@@ -60,16 +94,7 @@ powershell -ExecutionPolicy Bypass -c "Invoke-WebRequest -Uri 'https://raw.githu
 
 The installer walks you through provider selection, API key input, and model choice. First build takes 1-3 minutes. After that, `hades start` launches in seconds.
 
-## Why HADES?
-
-| Without HADES | With HADES |
-|---|---|
-| Install Python, pip, venv, Chromium, Playwright manually | One command. Docker handles everything. |
-| Works on one OS, breaks on another | Same setup on Linux, macOS, Windows, WSL |
-| Sessions gone after restart | Persistent volume memory, config, history survive |
-| API keys scattered in shell history | Stored in `~/.hades/.env`, chmod 600, never logged |
-| 6 providers, 6 config formats | Unified wizard pick provider, paste key, done |
-| Security? What security? | Localhost-only binding, random bearer token, no host access |
+---
 
 ## Commands
 
@@ -85,7 +110,10 @@ hades down           # stop + remove networks
 hades reset          # nuclear: wipe everything
 ```
 
-## Providers
+---
+
+<details>
+<summary><strong>Supported providers</strong></summary>
 
 | Provider | Env var |
 |---|---|
@@ -96,7 +124,10 @@ hades reset          # nuclear: wipe everything
 | DeepSeek | `DEEPSEEK_API_KEY` |
 | Custom | `CUSTOM_API_KEY` + `CUSTOM_BASE_URL` |
 
-## Config
+</details>
+
+<details>
+<summary><strong>Configuration</strong></summary>
 
 Edit `~/.hades/.env`, then `hades restart`. For build-time changes (browser support, version pin): `hades update`.
 
@@ -109,7 +140,52 @@ Edit `~/.hades/.env`, then `hades restart`. For build-time changes (browser supp
 | `GATEWAY_ALLOW_ALL_USERS` | `true` | Allow any API key to act as any user |
 | `API_SERVER_KEY` | *(generated)* | Bearer token for the API server |
 
-## Architecture
+</details>
+
+<details>
+<summary><strong>Non-interactive install</strong></summary>
+
+For CI, servers, or scripted deployments:
+
+```bash
+HERMES_NONINTERACTIVE=1 \
+OPENROUTER_API_KEY="sk-or-your-key-here" \
+bash install.sh --provider openrouter --model deepseek/deepseek-v4-flash:free --port 8642
+```
+
+```powershell
+.\install.ps1 -Provider openrouter -Model deepseek/deepseek-v4-flash:free -OpenRouterApiKey "sk-or-..." -Port 8642
+```
+
+</details>
+
+<details>
+<summary><strong>Uninstalling</strong></summary>
+
+```bash
+bash uninstall.sh                              # stop stack, keep data
+bash uninstall.sh --remove-data                # also drop the volume
+bash uninstall.sh --remove-files               # also delete ~/.hades
+bash uninstall.sh --remove-files --remove-data # gone
+```
+
+</details>
+
+<details>
+<summary><strong>Troubleshooting</strong></summary>
+
+| Problem | Fix |
+|---|---|
+| Docker not found | Linux: `sudo systemctl start docker`. macOS: open Docker.app. Windows: open Docker Desktop. |
+| Port 8642 in use | `hades stop` or install with `--port 18642` |
+| Config changes not applied | `hades restart` (or `hades update` for build-time changes) |
+| Browser tools missing | `bash install.sh --browser --force` browser is opt-in (~450 MB) |
+
+</details>
+
+---
+
+## How it works
 
 ```text
  HOST                                     CONTAINER
@@ -125,47 +201,11 @@ Edit `~/.hades/.env`, then `hades restart`. For build-time changes (browser supp
                                 +-----------------------------+
 ```
 
-Workspace is bind-mounted for direct file access. Hermes state (sessions, memory, skills, config) lives in a named Docker volume it survives container rebuilds and restarts.
+- **Workspace** is bind-mounted for direct file access
+- **Hermes state** (sessions, memory, skills, config) lives in a named Docker volume — survives container rebuilds
+- **API** binds to localhost only — never exposed to network
 
-## Non-interactive install
-
-For CI, servers, or scripted deployments:
-
-```bash
-HERMES_NONINTERACTIVE=1 \
-OPENROUTER_API_KEY="sk-or-your-key-here" \
-bash install.sh --provider openrouter --model deepseek/deepseek-v4-flash:free --port 8642
-```
-
-```powershell
-.\install.ps1 -Provider openrouter -Model deepseek/deepseek-v4-flash:free -OpenRouterApiKey "sk-or-..." -Port 8642
-```
-
-## Uninstalling
-
-```bash
-bash uninstall.sh                              # stop stack, keep data
-bash uninstall.sh --remove-data                # also drop the volume
-bash uninstall.sh --remove-files               # also delete ~/.hades
-bash uninstall.sh --remove-files --remove-data # gone
-```
-
-## Troubleshooting
-
-| Problem | Fix |
-|---|---|
-| Docker not found | Linux: `sudo systemctl start docker`. macOS: open Docker.app. Windows: open Docker Desktop. |
-| Port 8642 in use | `hades stop` or install with `--port 18642` |
-| Config changes not applied | `hades restart` (or `hades update` for build-time changes) |
-| Browser tools missing | `bash install.sh --browser --force` browser is opt-in (~450 MB) |
-
-## Built with
-
-- **Docker** multi-stage build (builder + slim runtime)
-- **Bash** + **PowerShell** cross-platform installers
-- **Docker Compose** for lifecycle management
-- **GitHub Actions** CI/CD ShellCheck, PowerShell parser validation, Compose config checks, Docker build + health probe, repo hygiene, automated upstream version bumping
-- **Security-first defaults** localhost binding, random bearer tokens, file permission hardening, environment leakage guards
+---
 
 ## CI pipeline
 
@@ -175,11 +215,11 @@ A daily workflow checks for new [Hermes Agent](https://github.com/NousResearch/h
 
 ## Docs
 
-- [Architecture](docs/ARCHITECTURE.md) runtime layout, lifecycle, security model
-- [Operations](docs/OPERATIONS.md) triage playbook, maintainer tasks, recovery
-- [Release Process](docs/RELEASE_PROCESS.md) tagging and publishing
-- [Contributing](CONTRIBUTING.md) validation and review expectations
-- [Security](SECURITY.md) reporting and hardening
+- [Architecture](docs/ARCHITECTURE.md) — runtime layout, lifecycle, security model
+- [Operations](docs/OPERATIONS.md) — triage playbook, maintainer tasks, recovery
+- [Release Process](docs/RELEASE_PROCESS.md) — tagging and publishing
+- [Contributing](CONTRIBUTING.md) — validation and review expectations
+- [Security](SECURITY.md) — reporting and hardening
 
 ## License
 
@@ -187,4 +227,10 @@ A daily workflow checks for new [Hermes Agent](https://github.com/NousResearch/h
 
 ---
 
-*Built by [@lunaticbugbear](https://github.com/lunaticbugbear) because setting up AI agents should not require a CS degree.*
+<div align="center">
+
+**Built by [@lunaticbugbear](https://github.com/lunaticbugbear)**
+
+*Because setting up AI agents should not require a CS degree.*
+
+</div>
