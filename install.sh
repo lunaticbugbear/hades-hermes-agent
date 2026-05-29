@@ -33,7 +33,7 @@ if [ -n "${PYTHONHOME:-}" ]; then
   unset PYTHONHOME
 fi
 
-VERSION="1.1.3"
+VERSION="1.2.0"
 DEFAULT_DIR=""
 if [ "$(id -u)" -eq 0 ]; then
   DEFAULT_DIR="/usr/local/lib/hades"
@@ -50,7 +50,7 @@ INSTALL_BROWSER="0"
 SKIP_BUILD="0"
 FORCE="0"
 UNINSTALL="0"
-HERMES_VERSION="${HERMES_VERSION:-main}"
+HERMES_VERSION="${HERMES_VERSION:-v2026.5.29}"
 NONINTERACTIVE="${HERMES_NONINTERACTIVE:-0}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; BOLD='\033[1m'; NC='\033[0m'
@@ -124,7 +124,7 @@ if [[ "$NONINTERACTIVE" != "1" ]]; then
       read -r -s api_key_input || true
       printf "\n"
       # shellcheck disable=SC2034
-      declare "$key_var=$api_key_input"
+      printf -v "$key_var" '%s' "$api_key_input"
     fi
 
     printf "Model [%s]: " "$MODEL"
@@ -254,11 +254,17 @@ EOF
       else
         log "Homebrew not found. Downloading Docker Desktop..."
         local dmg="/tmp/Docker.dmg"
-        curl -L -o "$dmg" "https://desktop.docker.com/mac/main/${dmg_arch}/Docker.dmg" || {
+        curl -L --max-time 300 -o "$dmg" "https://desktop.docker.com/mac/main/${dmg_arch}/Docker.dmg" || {
           warn "Download failed. Install Docker Desktop manually."
           warn "  https://docs.docker.com/desktop/install/mac-install/"
           return 1
         }
+        if [[ ! -s "$dmg" ]]; then
+          warn "Downloaded file is empty. URL may have changed."
+          warn "  Install Docker Desktop manually: https://docs.docker.com/desktop/install/mac-install/"
+          rm -f "$dmg"
+          return 1
+        fi
         sudo hdiutil attach "$dmg" -quiet 2>/dev/null || true
         if [ -d "/Volumes/Docker" ]; then
           cp -R "/Volumes/Docker/Docker.app" "/Applications" 2>/dev/null || true
@@ -500,9 +506,10 @@ write_files() {
   if safe_write Dockerfile; then
     cat > Dockerfile <<'EOF'
 # Stage 1: Builder — install Hermes + Python deps
-FROM python:3.12-slim-bookworm AS builder
+ARG PYTHON_VERSION=3.12-slim-bookworm
+FROM python:${PYTHON_VERSION} AS builder
 ARG INSTALL_BROWSER=0
-ARG HERMES_VERSION=main
+ARG HERMES_VERSION=v2026.5.29
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates build-essential python3-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
@@ -514,7 +521,7 @@ RUN git clone --depth 1 --branch $HERMES_VERSION \
     rm -rf /src/hermes /root/.cache /tmp/*
 
 # Stage 2: Runtime
-FROM python:3.12-slim-bookworm
+FROM python:${PYTHON_VERSION}
 ARG INSTALL_BROWSER=0
 ENV DEBIAN_FRONTEND=noninteractive \
     HADES_HOME=/root/.hermes \
@@ -555,14 +562,17 @@ mkdir -p "$HADES_HOME" /workspace "$HADES_HOME/logs"
 
 MODEL_PROVIDER="${MODEL_PROVIDER:-openrouter}"
 MODEL_NAME="${MODEL_NAME:-deepseek/deepseek-v4-flash:free}"
-API_SERVER_KEY="${API_SERVER_KEY:-change-me}"
+if [[ -z "${API_SERVER_KEY:-}" ]]; then
+  echo "ERROR: API_SERVER_KEY is not set. Aborting." >&2
+  exit 1
+fi
 API_SERVER_PORT="${API_SERVER_PORT:-8642}"
 CUSTOM_BASE_URL="${CUSTOM_BASE_URL:-}"
 
 if [[ ! -f "$HADES_HOME/.env" ]]; then
   cat > "$HADES_HOME/.env" <<EOENV
 API_SERVER_KEY=$API_SERVER_KEY
-GATEWAY_ALLOW_ALL_USERS=true
+GATEWAY_ALLOW_ALL_USERS=${GATEWAY_ALLOW_ALL_USERS:-true}
 PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
 EOENV
 
@@ -631,7 +641,8 @@ if command -v curl >/dev/null 2>&1; then
 elif command -v nc >/dev/null 2>&1; then
   nc -z 127.0.0.1 "$PORT" >/dev/null 2>&1
 else
-  exec 3<>/dev/tcp/127.0.0.1/"$PORT" 2>/dev/null
+  echo "ERROR: neither curl nor nc found. Cannot health-check." >&2
+  exit 1
 fi
 EOF
     chmod +x healthcheck.sh
@@ -645,7 +656,8 @@ services:
       context: .
       args:
         INSTALL_BROWSER: ${INSTALL_BROWSER:-0}
-        HERMES_VERSION: ${HERMES_VERSION:-main}
+        HERMES_VERSION: ${HERMES_VERSION:-v2026.5.29}
+        PYTHON_VERSION: ${PYTHON_VERSION:-3.12-slim-bookworm}
     image: local/hermes-agent:latest
     env_file:
       - .env
@@ -684,8 +696,8 @@ case "$cmd" in
   update) "${DC[@]}" build --pull && "${DC[@]}" up -d ;;
   down) "${DC[@]}" down "$@" ;;
   reset) "${DC[@]}" down -v "$@" ;;
-  url) . ./.env; echo "http://localhost:${API_SERVER_PORT:-8642}" ;;
-  key) . ./.env; echo "${API_SERVER_KEY:-}" ;;
+  url) grep -m1 "^API_SERVER_PORT=" .env 2>/dev/null | cut -d= -f2 | xargs -I{} echo http://localhost:{} || echo http://localhost:8642 ;;
+  key) grep -m1 "^API_SERVER_KEY=" .env 2>/dev/null | cut -d= -f2- ;;
   *)
     cat <<HELP
 Hades helper

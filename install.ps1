@@ -19,7 +19,7 @@ param(
   [switch]$SkipBuild,
   [switch]$Force,
   [switch]$Uninstall,
-  [string]$HermesVersion = $(if ($env:HERMES_VERSION) { $env:HERMES_VERSION } else { 'main' }),
+  [string]$HermesVersion = $(if ($env:HERMES_VERSION) { $env:HERMES_VERSION } else { 'v2026.5.29' }),
   [string]$OpenRouterApiKey = $env:OPENROUTER_API_KEY,
   [string]$AnthropicApiKey = $env:ANTHROPIC_API_KEY,
   [string]$OpenAIApiKey = $env:OPENAI_API_KEY,
@@ -150,6 +150,10 @@ function Safe-Write($Path, $Content) {
   }
   $parent = Split-Path $Path -Parent
   if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+  if ((Test-Path $Path) -and $Force) {
+    Copy-Item $Path "$Path.bak" -Force
+    Log "Backed up $Path to $Path.bak"
+  }
   Set-Content -Path $Path -Value $Content -Encoding UTF8
 }
 
@@ -393,7 +397,7 @@ Safe-Write 'Dockerfile' @'
 # Stage 1: Builder — install Hermes + Python deps
 FROM python:3.12-slim-bookworm AS builder
 ARG INSTALL_BROWSER=0
-ARG HERMES_VERSION=main
+ARG HERMES_VERSION=v2026.5.29
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates build-essential python3-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
@@ -444,14 +448,17 @@ mkdir -p "$HADES_HOME" /workspace "$HADES_HOME/logs"
 
 MODEL_PROVIDER="${MODEL_PROVIDER:-openrouter}"
 MODEL_NAME="${MODEL_NAME:-deepseek/deepseek-v4-flash:free}"
-API_SERVER_KEY="${API_SERVER_KEY:-change-me}"
+if [[ -z "${API_SERVER_KEY:-}" ]]; then
+  echo "ERROR: API_SERVER_KEY is not set. Aborting." >&2
+  exit 1
+fi
 API_SERVER_PORT="${API_SERVER_PORT:-8642}"
 CUSTOM_BASE_URL="${CUSTOM_BASE_URL:-}"
 
 if [[ ! -f "$HADES_HOME/.env" ]]; then
   cat > "$HADES_HOME/.env" <<EOENV
 API_SERVER_KEY=$API_SERVER_KEY
-GATEWAY_ALLOW_ALL_USERS=true
+GATEWAY_ALLOW_ALL_USERS=${GATEWAY_ALLOW_ALL_USERS:-true}
 PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
 EOENV
 
@@ -518,7 +525,8 @@ if command -v curl >/dev/null 2>&1; then
 elif command -v nc >/dev/null 2>&1; then
   nc -z 127.0.0.1 "$PORT" >/dev/null 2>&1
 else
-  exec 3<>/dev/tcp/127.0.0.1/"$PORT" 2>/dev/null
+  echo "ERROR: neither curl nor nc found. Cannot health-check." >&2
+  exit 1
 fi
 '@
 
@@ -529,7 +537,8 @@ services:
       context: .
       args:
         INSTALL_BROWSER: ${INSTALL_BROWSER:-0}
-        HERMES_VERSION: ${HERMES_VERSION:-main}
+        HERMES_VERSION: ${HERMES_VERSION:-v2026.5.29}
+        PYTHON_VERSION: ${PYTHON_VERSION:-3.12-slim-bookworm}
     image: local/hermes-agent:latest
     env_file:
       - .env
