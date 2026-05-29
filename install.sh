@@ -33,7 +33,7 @@ if [ -n "${PYTHONHOME:-}" ]; then
   unset PYTHONHOME
 fi
 
-VERSION="1.2.0"
+VERSION="1.3.0"
 DEFAULT_DIR=""
 if [ "$(id -u)" -eq 0 ]; then
   DEFAULT_DIR="/usr/local/lib/hades"

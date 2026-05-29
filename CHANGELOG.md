@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-05-29
+
+### Security
+- Replaced `change-me` API_SERVER_KEY fallback with hard failure — container will not start without a key
+- Made `GATEWAY_ALLOW_ALL_USERS` configurable via env var (defaults to true for backward compat)
+- Replaced `source .env` in `hades url`/`hades key` commands with grep to prevent code execution
+
+### Changed
+- Pinned `HERMES_VERSION` to `v2026.5.29` instead of tracking `main` — prevents surprise breakage from upstream changes
+- Added `PYTHON_VERSION` build arg to Dockerfile for reproducible image builds (default: `3.12-slim-bookworm`)
+- Improved macOS Docker Desktop install: added download timeout (300s) and empty-file validation
+- Replaced misleading `/dev/tcp` healthcheck fallback with explicit error message
+- Fixed variable scoping: replaced `declare` with `printf -v` for API key assignment in interactive mode
+- Aligned VERSION constant to match changelog
+- PS1 `Safe-Write` now backs up existing files before overwrite (matches bash behavior)
+- Added daily upstream Hermes release checker workflow (auto-PR when new tags appear)
+
 ## [1.2.0] - 2026-05-28
 
 - Renamed project from Omnipod to **HADES** (Hermes Agent Docker Environment Script). Install directory is now `~/.hades/`, control command is now `hades`.

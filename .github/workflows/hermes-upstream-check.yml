@@ -1,0 +1,73 @@
+name: hermes-upstream-check
+
+on:
+  schedule:
+    - cron: "37 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: hermes-upstream-bump
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check upstream Hermes release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Get latest upstream tag
+        id: upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LATEST=$(gh api repos/NousResearch/hermes-agent/tags --jq '.[0].name')
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+
+      - name: Get current pin
+        id: current
+        run: |
+          CURRENT=$(grep -oP 'HERMES_VERSION="\$\{HERMES_VERSION:-\K[^}]+' install.sh)
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+
+      - name: Compare and update
+        if: steps.upstream.outputs.latest != steps.current.outputs.current
+        run: |
+          OLD="${{ steps.current.outputs.current }}"
+          NEW="${{ steps.upstream.outputs.latest }}"
+          echo "Bumping HERMES_VERSION: $OLD -> $NEW"
+
+          # install.sh — default variable
+          sed -i "s|HERMES_VERSION=\"\${HERMES_VERSION:-$OLD}\"|HERMES_VERSION=\"\${HERMES_VERSION:-$NEW}\"|" install.sh
+
+          # install.sh — Dockerfile ARG in heredoc templates
+          sed -i "s|ARG HERMES_VERSION=$OLD|ARG HERMES_VERSION=$NEW|g" install.sh
+
+          # install.sh — docker-compose template
+          sed -i "s|HERMES_VERSION: \${HERMES_VERSION:-$OLD}|HERMES_VERSION: \${HERMES_VERSION:-$NEW}|g" install.sh
+
+          # install.ps1 — param default
+          sed -i "s|else { '$OLD' }|else { '$NEW' }|g" install.ps1
+
+          # install.ps1 — Dockerfile ARG in heredoc templates
+          sed -i "s|ARG HERMES_VERSION=$OLD|ARG HERMES_VERSION=$NEW|g" install.ps1
+
+          # install.ps1 — docker-compose template
+          sed -i "s|HERMES_VERSION: \${HERMES_VERSION:-$OLD}|HERMES_VERSION: \${HERMES_VERSION:-$NEW}|g" install.ps1
+
+      - name: Create pull request
+        if: steps.upstream.outputs.latest != steps.current.outputs.current
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/bump-hermes-${{ steps.upstream.outputs.latest }}
+          commit-message: "chore: bump Hermes pin to ${{ steps.upstream.outputs.latest }}"
+          title: "chore: bump Hermes pin to ${{ steps.upstream.outputs.latest }}"
+          body: |
+            Bumps `HERMES_VERSION` from `${{ steps.current.outputs.current }}` to `${{ steps.upstream.outputs.latest }}`.
+
+            Upstream release: https://github.com/NousResearch/hermes-agent/releases/tag/${{ steps.upstream.outputs.latest }}
+          labels: dependencies
