@@ -45,39 +45,6 @@ HADES wraps [Hermes Agent](https://github.com/NousResearch/hermes-agent) (by Nou
 
 ---
 
-## Demo
-
-<!-- Replace with your own GIF/terminal recording -->
-```
-$ curl -fsSL https://raw.githubusercontent.com/lunaticbugbear/hades-hermes-agent/main/install.sh | bash
-
-  ██╗  ██╗ █████╗ ██████╗ ███████╗███████╗
-  ██║  ██║██╔══██╗██╔══██╗██╔════╝██╔════╝
-  ███████║███████║██║  ██║█████╗  ███████╗
-  ██╔══██║██╔══██║██║  ██║██╔══╝  ╚════██║
-  ██║  ██║██║  ██║██████╔╝███████╗███████║
-  ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚══════╝
-
-  Hermes Agent Docker Environment Script v1.3.0
-
-  [✓] Docker detected
-  [✓] Image pulled
-  [✓] Container running
-  [✓] API healthy on 127.0.0.1:8642
-
-  Run `hades cli` to start coding with AI.
-```
-
-```bash
-$ hades cli
-You: refactor this function to handle edge cases
-Hermes: I'll read the file, identify the edge cases, and refactor...
-```
-
-> **Tip:** Record your own install GIF with [asciinema](https://asciinema.org/) or [vhs](https://github.com/charmbracelet/vhs) and drop it here.
-
----
-
 ## Quick start
 
 **Linux / macOS / WSL**
