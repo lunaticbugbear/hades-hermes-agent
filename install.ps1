@@ -19,7 +19,7 @@ param(
   [switch]$SkipBuild,
   [switch]$Force,
   [switch]$Uninstall,
-  [string]$HermesVersion = $(if ($env:HERMES_VERSION) { $env:HERMES_VERSION } else { 'v2026.5.29' }),
+  [string]$HermesVersion = $(if ($env:HERMES_VERSION) { $env:HERMES_VERSION } else { 'v2026.5.29.2' }),
   [string]$OpenRouterApiKey = $env:OPENROUTER_API_KEY,
   [string]$AnthropicApiKey = $env:ANTHROPIC_API_KEY,
   [string]$OpenAIApiKey = $env:OPENAI_API_KEY,
@@ -397,7 +397,7 @@ Safe-Write 'Dockerfile' @'
 # Stage 1: Builder — install Hermes + Python deps
 FROM python:3.12-slim-bookworm AS builder
 ARG INSTALL_BROWSER=0
-ARG HERMES_VERSION=v2026.5.29
+ARG HERMES_VERSION=v2026.5.29.2
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates build-essential python3-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
@@ -537,7 +537,7 @@ services:
       context: .
       args:
         INSTALL_BROWSER: ${INSTALL_BROWSER:-0}
-        HERMES_VERSION: ${HERMES_VERSION:-v2026.5.29}
+        HERMES_VERSION: ${HERMES_VERSION:-v2026.5.29.2}
         PYTHON_VERSION: ${PYTHON_VERSION:-3.12-slim-bookworm}
     image: local/hermes-agent:latest
     env_file:

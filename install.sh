@@ -50,7 +50,7 @@ INSTALL_BROWSER="0"
 SKIP_BUILD="0"
 FORCE="0"
 UNINSTALL="0"
-HERMES_VERSION="${HERMES_VERSION:-v2026.5.29}"
+HERMES_VERSION="${HERMES_VERSION:-v2026.5.29.2}"
 NONINTERACTIVE="${HERMES_NONINTERACTIVE:-0}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; BOLD='\033[1m'; NC='\033[0m'
@@ -509,7 +509,7 @@ write_files() {
 ARG PYTHON_VERSION=3.12-slim-bookworm
 FROM python:${PYTHON_VERSION} AS builder
 ARG INSTALL_BROWSER=0
-ARG HERMES_VERSION=v2026.5.29
+ARG HERMES_VERSION=v2026.5.29.2
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates build-essential python3-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
@@ -656,7 +656,7 @@ services:
       context: .
       args:
         INSTALL_BROWSER: ${INSTALL_BROWSER:-0}
-        HERMES_VERSION: ${HERMES_VERSION:-v2026.5.29}
+        HERMES_VERSION: ${HERMES_VERSION:-v2026.5.29.2}
         PYTHON_VERSION: ${PYTHON_VERSION:-3.12-slim-bookworm}
     image: local/hermes-agent:latest
     env_file:
