@@ -15,11 +15,11 @@ HADES is already usable as a local Docker wrapper for Hermes Agent. The roadmap 
 
 - Keep release assets easy to verify.
 - Document how users can validate downloaded installers.
-- Keep signatures/backstops under planned work until actually shipped.
 
-Already shipped in `v1.4.0`: published checksums and a documented GitHub
-artifact provenance attestation path. See `CHANGELOG.md` and
-`docs/RELEASE_VERIFICATION.md`.
+Already shipped in `v1.4.0`:
+- **Cosign keyless signing** — container images and installer artifacts are signed, verification documented in `docs/RELEASE_VERIFICATION.md`.
+- Published checksums and a documented GitHub artifact provenance attestation path.
+See `CHANGELOG.md` and `docs/RELEASE_VERIFICATION.md`.
 
 ### Smoke tests and health checks
 
@@ -46,27 +46,22 @@ artifact provenance attestation path. See `CHANGELOG.md` and
 
 These are good candidates for contributor or maintainer work because they are concrete, testable, and useful to all users:
 
-1. **Add release asset signing**
-   - Implement Sigstore/cosign or GPG signing in the release workflow.
-   - Update release verification docs.
-   - Keep SHA256 checksums as a baseline.
-
-2. **Expand Windows/WSL validation**
+1. **Expand Windows/WSL validation**
    - Add scripted PowerShell parser checks and generated-wrapper validation.
    - Document the exact Docker Desktop / WSL assumptions.
    - Add regression cases for path registration and profile updates.
 
-3. **Improve installer idempotency tests**
+2. **Improve installer idempotency tests**
    - Test reinstall with existing `~/.hades` files.
    - Test `--force` regeneration behavior.
    - Test uninstall paths that keep data vs remove data.
 
-4. **Add backup and rollback docs**
+3. **Add backup and rollback docs**
    - Document how to preserve the Hermes Docker volume before reset.
    - Document recovery from a bad release.
    - Add commands that avoid leaking secrets.
 
-5. **Improve provider configuration examples**
+4. **Improve provider configuration examples**
    - Add safe examples for OpenRouter, Anthropic, OpenAI, Gemini, DeepSeek, and custom endpoints.
    - Keep examples secret-free.
    - Clarify which settings require `hades restart` vs `hades update`.

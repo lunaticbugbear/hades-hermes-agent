@@ -43,17 +43,22 @@ if (-not (Test-Command 'docker')) {
 
 # Stop and remove the Docker stack
 if ($dockerAvailable) {
-  Push-Location $InstallDir
-  Log "Stopping Hades Docker stack..."
-  if ($RemoveData) {
-    docker compose down -v --remove-orphans
-    Ok "Stopped stack and removed data volumes."
+  docker compose version *> $null
+  if ($LASTEXITCODE -ne 0) {
+    Warn "Docker Compose v2 is not available. Skipping stack shutdown."
   } else {
-    docker compose down --remove-orphans
-    Ok "Stopped stack. Data volumes preserved."
-    Write-Host "  To remove data: .\uninstall.ps1 -RemoveData"
+    Push-Location $InstallDir
+    Log "Stopping Hades Docker stack..."
+    if ($RemoveData) {
+      docker compose down -v --remove-orphans
+      Ok "Stopped stack and removed data volumes."
+    } else {
+      docker compose down --remove-orphans
+      Ok "Stopped stack. Data volumes preserved."
+      Write-Host "  To remove data: .\uninstall.ps1 -RemoveData"
+    }
+    Pop-Location
   }
-  Pop-Location
 }
 
 # Remove files if requested

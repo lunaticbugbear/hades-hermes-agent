@@ -40,6 +40,7 @@ That's all. The installer downloads the runtime image, generates `~/.hades/`, an
 hades start          # spin up the runtime
 hades cli            # open the Hermes chat
 hades logs           # watch what the agent is doing
+hades check          # verify container health
 hades stop           # pause everything
 ```
 
@@ -59,7 +60,7 @@ bash install.sh --help
 For a published release, you can also verify checksums and the GitHub provenance attestation:
 
 ```bash
-gh release download v1.4.0 -R lunaticbugbear/hades-hermes-agent
+gh release download v1.4.2 -R lunaticbugbear/hades-hermes-agent
 sha256sum -c SHA256SUMS
 gh attestation verify install.sh -R lunaticbugbear/hades-hermes-agent
 ```

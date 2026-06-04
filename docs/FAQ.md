@@ -84,7 +84,7 @@ Internet is required for the first install (Docker image pull, dependency downlo
 ## How do I verify a release is authentic?
 
 ```bash
-gh release download v1.4.0 -R lunaticbugbear/hades-hermes-agent
+gh release download v1.4.2 -R lunaticbugbear/hades-hermes-agent
 sha256sum -c SHA256SUMS
 gh attestation verify install.sh -R lunaticbugbear/hades-hermes-agent
 ```
@@ -94,3 +94,45 @@ Details in [`docs/RELEASE_VERIFICATION.md`](RELEASE_VERIFICATION.md).
 ## Is HADES affiliated with OpenAI, Anthropic, Google, or Nous Research?
 
 No. HADES is an independent OSS installer wrapper. It supports those provider APIs through configuration. It is not endorsed by any of them.
+
+## How do I change the approval mode?
+
+Edit `~/.hades/.env` and set `APPROVAL_MODE` to either `manual` or `auto`:
+
+- **manual** (default): Hermes asks before every tool call (terminal, file write, web, etc.)
+- **auto**: Hermes executes tools without confirmation — use only if you trust the agent
+
+Then run `hades restart` to apply.
+
+## Can I use local models with GPU?
+
+Yes. Pass the `--gpus` flag during install:
+
+```bash
+bash install.sh --gpus all
+```
+
+Or set `GPU_DEVICES=all` in `~/.hades/.env` and run `hades update`. Requires `nvidia-container-toolkit` on the host.
+
+## How do I verify a release with cosign?
+
+```bash
+cosign verify-blob \
+  --certificate-identity-regexp 'https://github.com/lunaticbugbear/hades-hermes-agent/.github/workflows/release.yml@refs/tags/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --signature install.sh.sig \
+  install.sh
+```
+
+Container image verification:
+
+```bash
+cosign verify \
+  --certificate-identity-regexp 'https://github.com/lunaticbugbear/*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/lunaticbugbear/hades-hermes-agent:latest
+```
+
+## What is GATEWAY_ALLOW_ALL_USERS?
+
+It controls whether any API key can act as any user in the Hermes gateway. For single-user local installs, `true` is fine. If you expose the API to a network, set it to `false` and configure user mapping in the Hermes gateway config. See [Hermes Gateway docs](https://hermes-agent.nousresearch.com/docs/gateway/configuration) for user mapping setup.

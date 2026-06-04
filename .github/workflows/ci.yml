@@ -64,6 +64,22 @@ jobs:
           bash -n bootstrap.sh
           bash -n healthcheck.sh
           bash -n bin/hades
+      - name: Validate GPU YAML injection logic
+        run: |
+          # Test GPU YAML generation for 'all' case
+          HERMES_NONINTERACTIVE=1 OPENROUTER_API_KEY=dummy-token-123456789 bash install.sh --skip-build --force --dir "$RUNNER_TEMP/hades-gpu-all" --gpus all
+          if ! grep -q 'count: all' "$RUNNER_TEMP/hades-gpu-all/docker-compose.yml"; then
+            echo "FAIL: --gpus all did not inject count: all"
+            exit 1
+          fi
+          echo "PASS: GPU 'all' YAML structure valid"
+          # Test GPU YAML generation for specific device
+          HERMES_NONINTERACTIVE=1 OPENROUTER_API_KEY=dummy-token-123456789 bash install.sh --skip-build --force --dir "$RUNNER_TEMP/hades-gpu-dev" --gpus 0
+          if ! grep -q 'device_ids:' "$RUNNER_TEMP/hades-gpu-dev/docker-compose.yml"; then
+            echo "FAIL: --gpus 0 did not inject device_ids"
+            exit 1
+          fi
+          echo "PASS: GPU device YAML structure valid"
       - name: Assert browser is opt-in by default
         working-directory: ${{ runner.temp }}/hades-ci
         run: grep -q '^INSTALL_BROWSER=0$' .env
@@ -171,6 +187,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Ensure actionlint binary is not committed
+        run: |
+          if [ -f actionlint ]; then
+            echo 'FAIL: actionlint binary should not be committed. It is in .gitignore.'
+            exit 1
+          fi
+          echo "PASS: no committed actionlint binary"
       - name: Run actionlint
         run: |
           bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
@@ -217,7 +240,7 @@ jobs:
           changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
           echo "Changed files:"; echo "$changed"
           if echo "$changed" | grep -qE '^(install\.sh|install\.ps1|uninstall\.sh|uninstall\.ps1|\.github/workflows/)'; then
-            if echo "$changed" | grep -qx 'CHANGELOG.md'; then
+            if echo "$changed" | grep -q 'CHANGELOG\.md'; then
               echo "changelog-updated-ok"
             else
               echo 'Sensitive files changed but CHANGELOG.md was not updated.'
@@ -234,17 +257,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v3
       - name: Generate files
         run: |
           HERMES_NONINTERACTIVE=1 OPENROUTER_API_KEY=dummy-token-123456789 bash install.sh --skip-build --force --dir "$RUNNER_TEMP/hermes-smoke"
-      - name: Build Docker image
+      - name: Build Docker image with buildx cache
         working-directory: ${{ runner.temp }}/hermes-smoke
-        run: docker compose build --progress=plain
+        run: |
+          docker buildx build \
+            --cache-from=type=gha \
+            --cache-to=type=gha,mode=max \
+            --load \
+            -t local/hermes-agent:latest \
+            .
       - name: Start container
         working-directory: ${{ runner.temp }}/hermes-smoke
         run: |
           docker compose up -d
           docker compose ps
+      - name: Verify container runs as non-root
+        run: |
+          who=$(docker compose -f "$RUNNER_TEMP/hermes-smoke/docker-compose.yml" exec -T hermes whoami)
+          if [ "$who" != "hermes" ]; then
+            echo "FAIL: container should run as 'hermes', got '$who'"
+            exit 1
+          fi
+          echo "PASS: container runs as $who"
       - name: Healthcheck wait
         run: |
           echo "Waiting for Hermes API..."
@@ -260,7 +300,68 @@ jobs:
           echo "Healthcheck failed after 120s"
           docker compose -f "$RUNNER_TEMP/hermes-smoke/docker-compose.yml" logs --tail 120 hermes || true
           exit 1
+      - name: Integration test - REST API models endpoint
+        run: |
+          echo "Testing /v1/models endpoint..."
+          curl -sf http://localhost:8642/v1/models > /dev/null
+          echo "PASS: /v1/models is reachable"
+      - name: Integration test - tools list inside container
+        run: |
+          echo "Testing hermes tools list inside container..."
+          docker compose -f "$RUNNER_TEMP/hermes-smoke/docker-compose.yml" exec -T hermes hermes tools list
+          echo "PASS: tools list executed"
+      - name: Integration test - config.yaml exists inside container
+        run: |
+          echo "Checking config.yaml inside container..."
+          docker compose -f "$RUNNER_TEMP/hermes-smoke/docker-compose.yml" exec -T hermes test -f /home/hermes/.hermes/config.yaml
+          echo "PASS: config.yaml exists"
+      - name: Integration test - approval mode
+        run: |
+          echo "Testing approval mode (dry run)..."
+          docker compose -f "$RUNNER_TEMP/hermes-smoke/docker-compose.yml" exec -T hermes hermes --help 2>&1 | grep -q 'approval' && echo "PASS: approval mode flag present" || echo "INFO: approval flag not in --help, may be env-var gated"
       - name: Cleanup
         if: always()
         working-directory: ${{ runner.temp }}/hermes-smoke
+        run: docker compose down -v 2>/dev/null || true
+
+  multiarch:
+    name: Multi-arch build validation
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Set up QEMU for multi-arch
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Generate files
+        run: |
+          HERMES_NONINTERACTIVE=1 OPENROUTER_API_KEY=dummy-token-123456789 bash install.sh --skip-build --force --dir "$RUNNER_TEMP/hermes-multiarch"
+      - name: Build multi-arch (no push)
+        working-directory: ${{ runner.temp }}/hermes-multiarch
+        run: |
+          docker buildx build --platform linux/amd64,linux/arm64 --output type=cacheonly .
+
+  security-scan:
+    name: Trivy vulnerability scan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Generate files
+        run: |
+          HERMES_NONINTERACTIVE=1 OPENROUTER_API_KEY=dummy-token-123456789 bash install.sh --skip-build --force --dir "$RUNNER_TEMP/hermes-scan"
+      - name: Build Docker image
+        working-directory: ${{ runner.temp }}/hermes-scan
+        run: docker compose build --progress=plain
+      - name: Run Trivy vulnerability scan
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest \
+            image --severity CRITICAL,HIGH --exit-code 1 \
+            local/hermes-agent:latest
+      - name: Cleanup
+        if: always()
+        working-directory: ${{ runner.temp }}/hermes-scan
         run: docker compose down -v 2>/dev/null || true

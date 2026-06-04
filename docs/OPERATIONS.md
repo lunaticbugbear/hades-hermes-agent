@@ -29,7 +29,7 @@ The repo is installer source only. Generated at install time:
 - `.env`
 - `workspace/`
 
-Persistent Hermes data lives in the `hermes_home` Docker volume, mounted at `/root/.hermes`.
+Persistent Hermes data lives in the `hermes_home` Docker volume, mounted at `/home/hermes/.hermes`.
 
 ---
 
@@ -49,6 +49,24 @@ PY
 HERMES_NONINTERACTIVE=1 OPENROUTER_API_KEY=dummy-token-123456789 bash install.sh --skip-build --force --dir /tmp/hades-ci
 cd /tmp/hades-ci && docker compose config
 bash -n bootstrap.sh healthcheck.sh bin/hades
+
+### Prebuilt image vs local build verification
+
+```bash
+# Verify the release artifact signature
+cosign verify-blob \
+  --bundle install.sh.bundle \
+  --certificate-identity-regexp 'https://github.com/lunaticbugbear/*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  install.sh
+
+# Verify the prebuilt container image tag matches
+docker pull ghcr.io/lunaticbugbear/hades-hermes-agent:latest
+cosign verify \
+  --certificate-identity-regexp 'https://github.com/lunaticbugbear/*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/lunaticbugbear/hades-hermes-agent:latest
+```
 ```
 
 Windows parser check (optional):
@@ -88,10 +106,19 @@ curl -sf http://127.0.0.1:8642/health
 ### Check a live install
 
 ```bash
-hades status
-hades url
+hades status     # container running?
+hades check      # full health check (container + API)
+hades url        # print API URL
 hades logs
 hades shell
+```
+
+### Backup and restore
+
+```bash
+hades backup                          # backup Hermes data to ./backups/
+hades backup /path/to/dir             # backup to custom path
+hades restore /path/to/backup.tar.gz  # restore data (container must be running)
 ```
 
 If the wrapper isn't in PATH:

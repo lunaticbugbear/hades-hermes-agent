@@ -6,6 +6,10 @@ on:
       - 'v*'
   workflow_dispatch:
     inputs:
+      hermes_version:
+        description: 'Hermes Agent version to bundle (e.g. v2026.5.29.2)'
+        required: false
+        default: 'v2026.5.29.2'
       tag:
         description: 'Existing v* tag to publish or republish'
         required: true
@@ -14,16 +18,92 @@ permissions:
   contents: write
   id-token: write
   attestations: write
+  packages: write
 
 jobs:
+  build-and-push:
+    name: Build and push multi-arch Docker image
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG_NAME: ${{ github.event.inputs.tag || github.ref_name }}
+      HERMES_VERSION: ${{ github.event.inputs.hermes_version || 'v2026.5.29.2' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Validate HERMES_VERSION
+        run: |
+          if ! echo "$HERMES_VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "ERROR: HERMES_VERSION must be a semver like v2026.5.29.2, got: $HERMES_VERSION"
+            exit 1
+          fi
+          echo "Building with Hermes Agent $HERMES_VERSION"
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log into ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/lunaticbugbear/hades-hermes-agent
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+            type=raw,value=hermes-${{ env.HERMES_VERSION }}
+
+      - name: Generate files for build
+        run: |
+          HERMES_NONINTERACTIVE=1 OPENROUTER_API_KEY=dummy-...6789 bash install.sh --skip-build --force --dir "$RUNNER_TEMP/hermes-release"
+
+      - name: Build and push multi-arch image
+        id: build-push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ runner.temp }}/hermes-release
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            HERMES_VERSION=${{ env.HERMES_VERSION }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign the container image with cosign
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          cosign sign \
+            --yes \
+            --rekor-upload \
+            --tlog-upload \
+            ghcr.io/lunaticbugbear/hades-hermes-agent@${{ steps.build-push.outputs.digest }}
+
   release:
     name: Build release notes and publish assets
     runs-on: ubuntu-latest
+    needs: build-and-push
     env:
       GH_TOKEN: ${{ github.token }}
       TAG_NAME: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
 
       - name: Install Syft
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0
@@ -39,6 +119,18 @@ jobs:
           (cd dist && sha256sum install.sh install.ps1 uninstall.sh uninstall.ps1 README.md LICENSE CHANGELOG.md SECURITY.md SUPPORT.md > SHA256SUMS)
           syft dir:dist -o spdx-json=dist/sbom.spdx.json
 
+      - name: Sign installer artifacts with cosign
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          for f in dist/install.sh dist/install.ps1 dist/uninstall.sh dist/uninstall.ps1 dist/SHA256SUMS dist/sbom.spdx.json; do
+            cosign sign-blob \
+              --yes \
+              --rekor-upload \
+              --tlog-upload \
+              "$f" > "$f.sig"
+          done
+
       - name: Generate release notes body
         run: |
           {
@@ -51,10 +143,23 @@ jobs:
             echo "- uninstall.ps1"
             echo "- SHA256SUMS"
             echo "- sbom.spdx.json"
+            echo "- cosign signatures (*.sig)"
+            echo
+            echo "### Container image"
+            echo "- \`ghcr.io/lunaticbugbear/hades-hermes-agent:${{ env.TAG_NAME }}\`"
+            echo "- Multi-arch: linux/amd64, linux/arm64"
+            echo "- Cosign-signed with Rekor timestamp"
             echo
             echo "### Verification"
             echo '```bash'
             echo 'sha256sum -c SHA256SUMS'
+            echo '```'
+            echo
+            echo '### Cosign signature verification'
+            echo '```bash'
+            echo 'cosign verify ghcr.io/lunaticbugbear/hades-hermes-agent:${{ env.TAG_NAME }} \\'
+            echo '  --certificate-identity-regexp "https://github.com/lunaticbugbear/hades-hermes-agent/.github/workflows/release.yml@refs/tags/" \\'
+            echo '  --certificate-oidc-issuer "https://token.actions.githubusercontent.com"'
             echo '```'
             echo
             echo 'GitHub artifact provenance attestation is published for the shipped installer asset.'
@@ -80,16 +185,22 @@ jobs:
           esac
           FILES=(
             dist/install.sh
+            dist/install.sh.sig
             dist/install.ps1
+            dist/install.ps1.sig
             dist/uninstall.sh
+            dist/uninstall.sh.sig
             dist/uninstall.ps1
+            dist/uninstall.ps1.sig
             dist/README.md
             dist/LICENSE
             dist/CHANGELOG.md
             dist/SECURITY.md
             dist/SUPPORT.md
             dist/SHA256SUMS
+            dist/SHA256SUMS.sig
             dist/sbom.spdx.json
+            dist/sbom.spdx.json.sig
           )
 
           if gh release view "$TAG" >/dev/null 2>&1; then

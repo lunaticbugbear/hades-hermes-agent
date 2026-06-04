@@ -32,3 +32,16 @@ jobs:
           test ! -f bin/hades
           test ! -f bin/hades.ps1
           test ! -f bin/hades.cmd
+      - name: Check for trailing whitespace in Markdown files
+        run: |
+          if grep -rn '[[:space:]]$' --include='*.md' .; then
+            echo 'Trailing whitespace found in .md files (see lines above).'
+            exit 1
+          fi
+      - name: Validate markdown formatting
+        run: |
+          if grep -rn ' $' --include='*.md' .; then
+            echo 'Trailing whitespace found in markdown files. Remove it.'
+            exit 1
+          fi
+          echo "markdown-formatting-ok"

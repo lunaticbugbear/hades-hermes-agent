@@ -22,7 +22,7 @@ It handles:
 |   docker-compose.yml   |      |   API: 127.0.0.1:8642       |
 |   workspace/  <--------+------+-> /workspace                |
 |                        |      |                             |
-+------------------------+      |   /root/.hermes <-----------+-- volume
++------------------------+      |   /home/hermes/.hermes <-----------+-- volume
                                 |   (sessions, memory,        |
                                 |    skills, config)          |
                                 +-----------------------------+
@@ -40,7 +40,7 @@ It handles:
 
 ### Container side
 
-Persistent Hermes state lives in a Docker named volume mounted at `/root/.hermes`. Sessions, memories, skills, and config survive container rebuilds and restarts.
+Persistent Hermes state lives in a Docker named volume mounted at `/home/hermes/.hermes`. Sessions, memories, skills, and config survive container rebuilds and restarts.
 
 ## Lifecycle
 
@@ -57,9 +57,10 @@ Persistent Hermes state lives in a Docker named volume mounted at `/root/.hermes
 
 `bootstrap.sh` runs as the container entrypoint:
 
+- migrates data from legacy `/root/.hermes` to `/home/hermes/.hermes` if found
 - creates required directories if missing
-- seeds `.env` and `config.yaml` only when they don't exist yet
-- never overwrites existing config
+- seeds `.env` and `config.yaml` using md5 hashing — regenerates config only when host env vars change
+- enables all Hermes tools (terminal, file, web, browser, vision, skills, memory, session_search, delegation, cronjob, todo)
 - hands off to `hermes gateway run`
 
 ## Security defaults
@@ -77,11 +78,11 @@ Persistent Hermes state lives in a Docker named volume mounted at `/root/.hermes
 - PATH registration targets `bash`, `zsh`, `fish`
 - root installs use `/usr/local/lib/hades` + `/usr/local/bin/hades`
 
-**Windows:**
-- installer is `install.ps1`
-- helper scripts include `.ps1` and `.cmd`
-- PATH registered at User or Machine scope based on elevation
-- Docker Desktop required
+|**Windows:**
+|- installer is `install.ps1`
+|- helper scripts include `.ps1` and `.cmd` (generated at install time from templates in the installers)
+|- PATH registered at User or Machine scope based on elevation
+|- Docker Desktop required
 
 ## Design principles
 

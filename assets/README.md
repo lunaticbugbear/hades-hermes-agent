@@ -1,6 +1,4 @@
-# Repository assets
-
-## Social preview
+# Social preview assets
 
 Primary file for GitHub social preview:
 
@@ -14,9 +12,3 @@ Suggested upload path in GitHub UI:
 4. Upload `assets/social-preview.png`
 
 The matching SVG source is `social-preview.svg` for future edits.
-
-## Demo media
-
-There is no synthetic demo art in this repo. A real terminal capture of the
-install and runtime flow is on the roadmap. Until it exists, the install path
-is exercised by the CI smoke test in `.github/workflows/ci.yml`.

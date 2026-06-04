@@ -20,15 +20,17 @@ param(
   [switch]$SkipBuild,
   [switch]$Force,
   [switch]$Uninstall,
+  [string]$GpuDevices = '',
   [string]$HermesVersion = $(if ($env:HERMES_VERSION) { $env:HERMES_VERSION } else { 'v2026.5.29.2' }),
   [string]$OpenRouterApiKey = $env:OPENROUTER_API_KEY,
   [string]$AnthropicApiKey = $env:ANTHROPIC_API_KEY,
   [string]$OpenAIApiKey = $env:OPENAI_API_KEY,
-  [string]$GoogleApiKey = $env:GOOGLE_API_KEY,
+  [string]$GoogleApiKey = $(if ($env:GOOGLE_API_KEY) { $env:GOOGLE_API_KEY } else { $env:GEMINI_API_KEY }),
   [string]$DeepSeekApiKey = $env:DEEPSEEK_API_KEY,
   [string]$CustomApiKey = $env:CUSTOM_API_KEY,
   [string]$CustomBaseUrl = $env:CUSTOM_BASE_URL,
-  [string]$ApiServerKey = $env:API_SERVER_KEY
+  [string]$ApiServerKey = $env:API_SERVER_KEY,
+  [string]$ApprovalMode = $(if ($env:APPROVAL_MODE) { $env:APPROVAL_MODE } else { 'manual' })
 )
 
 # Guard against environment leakage
@@ -166,6 +168,9 @@ function Test-PortInUse([int]$Port) {
 }
 
 function Resolve-Port() {
+  if ($Port -lt 1 -or $Port -gt 65535) {
+    Die "Invalid port: $Port. Must be between 1 and 65535."
+  }
   if (Test-PortInUse $Port) {
     Warn "Port $Port is already in use."
     foreach ($candidate in @(8643,8644,18642,28642)) {
@@ -273,7 +278,7 @@ if (-not $PSBoundParameters.ContainsKey('Provider')) {
     '3' { $Provider='openai'; if (-not $PSBoundParameters.ContainsKey('Model')) { $Model='gpt-4.1' } }
     '4' { $Provider='google'; if (-not $PSBoundParameters.ContainsKey('Model')) { $Model='gemini-2.0-flash' } }
     '5' { $Provider='deepseek'; if (-not $PSBoundParameters.ContainsKey('Model')) { $Model='deepseek-chat' } }
-    '6' { $Provider='custom' }
+    '6' { $Provider='custom'; if (-not $PSBoundParameters.ContainsKey('Model')) { $Model='custom-model' } }
     default { Die "Invalid provider choice: $choice" }
   }
 
@@ -336,16 +341,6 @@ if (-not $selectedKey) {
   Warn "API key looks unusually short. Continuing, but verify it in $InstallDir\.env if model calls fail."
 }
 
-$orKey=''; $anthKey=''; $oaKey=''; $gKey=''; $gemKey=''; $dsKey=''; $cKey=''
-switch ($Provider) {
-  'openrouter' { $orKey=$OpenRouterApiKey }
-  'anthropic' { $anthKey=$AnthropicApiKey }
-  'openai' { $oaKey=$OpenAIApiKey }
-  'google' { $gKey=$GoogleApiKey; $gemKey=$GoogleApiKey }
-  'deepseek' { $dsKey=$DeepSeekApiKey }
-  'custom' { $cKey=$CustomApiKey }
-}
-
 $installBrowser = if ($Browser) { '1' } else { '0' }
 
 # ── Generate files ──────────────────────────────────────────────
@@ -375,7 +370,10 @@ if ($Force) {
   }
 }
 
-Safe-Write '.env' @"
+# Write .env with only the active provider's key (matching install.sh behavior)
+switch ($Provider) {
+  'google' {
+    Safe-Write '.env' @"
 COMPOSE_PROJECT_NAME=$ProjectName
 MODEL_PROVIDER=$Provider
 MODEL_NAME=$Model
@@ -383,16 +381,54 @@ API_SERVER_PORT=$Port
 API_SERVER_KEY=$ApiServerKey
 INSTALL_BROWSER=$installBrowser
 HERMES_VERSION=$HermesVersion
-# Provider keys. Fill only the provider you use.
-$(if ($orKey) { "OPENROUTER_API_KEY=$orKey" })
-$(if ($anthKey) { "ANTHROPIC_API_KEY=$anthKey" })
-$(if ($oaKey) { "OPENAI_API_KEY=$oaKey" })
-$(if ($gKey) { "GOOGLE_API_KEY=$gKey" })
-$(if ($gemKey) { "GEMINI_API_KEY=$gemKey" })
-$(if ($dsKey) { "DEEPSEEK_API_KEY=$dsKey" })
-$(if ($cKey) { "CUSTOM_API_KEY=$cKey" })
+APPROVAL_MODE=$ApprovalMode
+GPU_DEVICES=$GpuDevices
+GOOGLE_API_KEY=$GoogleApiKey
+GEMINI_API_KEY=$GoogleApiKey
+"@
+  }
+  'custom' {
+    Safe-Write '.env' @"
+COMPOSE_PROJECT_NAME=$ProjectName
+MODEL_PROVIDER=$Provider
+MODEL_NAME=$Model
+API_SERVER_PORT=$Port
+API_SERVER_KEY=$ApiServerKey
+INSTALL_BROWSER=$installBrowser
+HERMES_VERSION=$HermesVersion
+APPROVAL_MODE=$ApprovalMode
+GPU_DEVICES=$GpuDevices
+CUSTOM_API_KEY=$CustomApiKey
 $(if ($CustomBaseUrl) { "CUSTOM_BASE_URL=$CustomBaseUrl" })
 "@
+  }
+  default {
+    $keyVar = switch ($Provider) {
+      'openrouter' { 'OPENROUTER_API_KEY' }
+      'anthropic' { 'ANTHROPIC_API_KEY' }
+      'openai' { 'OPENAI_API_KEY' }
+      'deepseek' { 'DEEPSEEK_API_KEY' }
+    }
+    $keyValue = switch ($Provider) {
+      'openrouter' { $OpenRouterApiKey }
+      'anthropic' { $AnthropicApiKey }
+      'openai' { $OpenAIApiKey }
+      'deepseek' { $DeepSeekApiKey }
+    }
+    Safe-Write '.env' @"
+COMPOSE_PROJECT_NAME=$ProjectName
+MODEL_PROVIDER=$Provider
+MODEL_NAME=$Model
+API_SERVER_PORT=$Port
+API_SERVER_KEY=$ApiServerKey
+INSTALL_BROWSER=$installBrowser
+HERMES_VERSION=$HermesVersion
+APPROVAL_MODE=$ApprovalMode
+GPU_DEVICES=$GpuDevices
+${keyVar}=${keyValue}
+"@
+  }
+}
 
 Safe-Write 'Dockerfile' @'
 # Stage 1: Builder — install Hermes + Python deps
@@ -406,21 +442,22 @@ RUN git clone --depth 1 --branch $HERMES_VERSION \
     https://github.com/NousResearch/hermes-agent.git /src/hermes && \
     python3 -m venv /venv && \
     /venv/bin/pip install --no-cache-dir -U pip setuptools wheel && \
-    /venv/bin/pip install --no-cache-dir '/src/hermes[all]' && \
+    /venv/bin/pip install --no-cache-dir '/src/hermes[gateway,tools]' && \
     rm -rf /src/hermes /root/.cache /tmp/*
 
 # Stage 2: Runtime
 FROM python:3.12-slim-bookworm
 ARG INSTALL_BROWSER=0
 ENV DEBIAN_FRONTEND=noninteractive \
-    HADES_HOME=/root/.hermes \
-    PATH=/venv/bin:/root/.local/bin:$PATH \
+    HADES_HOME=/home/hermes/.hermes \
+    PATH=/venv/bin:/home/hermes/.local/bin:$PATH \
     PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash ca-certificates curl tmux cron jq ripgrep fd-find \
     procps less nano openssh-client netcat-openbsd \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m -u 1000 -s /bin/bash hermes
 
 COPY --from=builder /venv /venv
 
@@ -433,7 +470,11 @@ COPY bootstrap.sh /usr/local/bin/bootstrap.sh
 COPY healthcheck.sh /usr/local/bin/healthcheck.sh
 RUN chmod +x /usr/local/bin/bootstrap.sh /usr/local/bin/healthcheck.sh
 
+RUN mkdir -p /home/hermes/.local/bin /home/hermes/.cache && \
+    chown -R hermes:hermes /venv /home/hermes
+
 WORKDIR /workspace
+USER hermes
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
     CMD /usr/local/bin/healthcheck.sh
 ENTRYPOINT ["/usr/local/bin/bootstrap.sh"]
@@ -443,9 +484,22 @@ CMD ["hermes", "gateway", "run"]
 Safe-Write 'bootstrap.sh' @'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-export HADES_HOME="${HADES_HOME:-/root/.hermes}"
-export PATH="/venv/bin:/root/.local/bin:$PATH"
+export HADES_HOME="${HADES_HOME:-/home/hermes/.hermes}"
+export HOME="/home/hermes"
+export PATH="/venv/bin:/home/hermes/.local/bin:$PATH"
 mkdir -p "$HADES_HOME" /workspace "$HADES_HOME/logs"
+
+# Migration: if old /root/.hermes exists with data, move it to new home
+if [[ -d /root/.hermes ]] && [[ ! -f "$HADES_HOME/.hermes_initialized" ]]; then
+  mkdir -p "$(dirname "$HADES_HOME")"
+  if [[ -d /root/.hermes/sessions ]] || [[ -d /root/.hermes/memories ]] || [[ -d /root/.hermes/skills ]]; then
+    echo "HADES: migrating /root/.hermes to $HADES_HOME..."
+    cp -a /root/.hermes/. "$HADES_HOME/" 2>/dev/null || true
+    echo "HADES: migration complete"
+  fi
+  rm -rf /root/.hermes
+  touch "$HADES_HOME/.hermes_initialized"
+fi
 
 MODEL_PROVIDER="${MODEL_PROVIDER:-openrouter}"
 MODEL_NAME="${MODEL_NAME:-deepseek/deepseek-v4-flash:free}"
@@ -455,33 +509,44 @@ if [[ -z "${API_SERVER_KEY:-}" ]]; then
 fi
 API_SERVER_PORT="${API_SERVER_PORT:-8642}"
 CUSTOM_BASE_URL="${CUSTOM_BASE_URL:-}"
+APPROVAL_MODE="${APPROVAL_MODE:-manual}"
 
-if [[ ! -f "$HADES_HOME/.env" ]]; then
-  cat > "$HADES_HOME/.env" <<EOENV
+# Always regenerate .env from current env vars (with hash guard)
+GENERATED_ENV=$(cat <<EOENV
 API_SERVER_KEY=$API_SERVER_KEY
 GATEWAY_ALLOW_ALL_USERS=${GATEWAY_ALLOW_ALL_USERS:-true}
-PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+PLAYWRIGHT_BROWSERS_PATH=/home/hermes/.cache/ms-playwright
+APPROVAL_MODE=$APPROVAL_MODE
 EOENV
+)
 
-  # Write only the relevant provider key
-  case "$MODEL_PROVIDER" in
-    openrouter) echo "OPENROUTER_API_KEY=${OPEN...-}" >> "$HADES_HOME/.env" ;;
-    anthropic)  echo "ANTHROPIC_API_KEY=${ANTH...-}" >> "$HADES_HOME/.env" ;;
-    openai)     echo "OPENAI_API_KEY=${OPEN...-}" >> "$HADES_HOME/.env" ;;
-    google)
-      echo "GOOGLE_API_KEY=${GOOG...-}" >> "$HADES_HOME/.env"
-      echo "GEMINI_API_KEY=${GEMI...-}" >> "$HADES_HOME/.env" ;;
-    deepseek)   echo "DEEPSEEK_API_KEY=${DEEP...-}" >> "$HADES_HOME/.env" ;;
-    custom)
-      echo "CUSTOM_API_KEY=${CUST...-}" >> "$HADES_HOME/.env"
-      echo "CUSTOM_BASE_URL=${CUSTOM_BASE_URL:-}" >> "$HADES_HOME/.env" ;;
-  esac
+# Write only the relevant provider key(s)
+case "$MODEL_PROVIDER" in
+  openrouter) GENERATED_ENV="$GENERATED_ENV"$'\n'"OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}" ;;
+  anthropic)  GENERATED_ENV="$GENERATED_ENV"$'\n'"ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}" ;;
+  openai)     GENERATED_ENV="$GENERATED_ENV"$'\n'"OPENAI_API_KEY=${OPENAI_API_KEY:-}" ;;
+  google)
+    GENERATED_ENV="$GENERATED_ENV"$'\n'"GOOGLE_API_KEY=${GOOGLE_API_KEY:-}"
+    GENERATED_ENV="$GENERATED_ENV"$'\n'"GEMINI_API_KEY=${GEMINI_API_KEY:-}" ;;
+  deepseek)   GENERATED_ENV="$GENERATED_ENV"$'\n'"DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}" ;;
+  custom)
+    GENERATED_ENV="$GENERATED_ENV"$'\n'"CUSTOM_API_KEY=${CUSTOM_API_KEY:-}"
+    GENERATED_ENV="$GENERATED_ENV"$'\n'"CUSTOM_BASE_URL=${CUSTOM_BASE_URL:-}" ;;
+esac
 
+CURRENT_ENV_HASH=$(echo "$GENERATED_ENV" | md5sum 2>/dev/null | cut -d' ' -f1)
+EXISTING_ENV_HASH=""
+if [[ -f "$HADES_HOME/.env" ]]; then
+  EXISTING_ENV_HASH=$(md5sum "$HADES_HOME/.env" 2>/dev/null | cut -d' ' -f1)
+fi
+
+if [[ "$CURRENT_ENV_HASH" != "$EXISTING_ENV_HASH" ]]; then
+  echo "$GENERATED_ENV" > "$HADES_HOME/.env"
   chmod 600 "$HADES_HOME/.env" || true
 fi
 
-if [[ ! -f "$HADES_HOME/config.yaml" ]]; then
-  cat > "$HADES_HOME/config.yaml" <<EOCFG
+# Always regenerate config.yaml from current env vars (with hash guard)
+GENERATED_CFG=$(cat <<EOCFG
 model:
   provider: "$MODEL_PROVIDER"
   default: "$MODEL_NAME"
@@ -497,7 +562,7 @@ memory:
   user_profile_enabled: true
 
 approvals:
-  mode: manual
+  mode: $APPROVAL_MODE
 
 platforms:
   api_server:
@@ -507,7 +572,16 @@ platforms:
       port: $API_SERVER_PORT
       key: "$API_SERVER_KEY"
 EOCFG
+)
 
+CURRENT_CFG_HASH=$(echo "$GENERATED_CFG" | md5sum 2>/dev/null | cut -d' ' -f1)
+EXISTING_CFG_HASH=""
+if [[ -f "$HADES_HOME/config.yaml" ]]; then
+  EXISTING_CFG_HASH=$(md5sum "$HADES_HOME/config.yaml" 2>/dev/null | cut -d' ' -f1)
+fi
+
+if [[ "$CURRENT_CFG_HASH" != "$EXISTING_CFG_HASH" ]]; then
+  echo "$GENERATED_CFG" > "$HADES_HOME/config.yaml"
   for tool in terminal file web browser vision skills memory session_search delegation cronjob todo; do
     hermes tools enable "$tool" >/dev/null 2>&1 || true
   done
@@ -543,10 +617,13 @@ services:
     image: local/hermes-agent:latest
     env_file:
       - .env
+    environment:
+      GATEWAY_ALLOW_ALL_USERS: ${GATEWAY_ALLOW_ALL_USERS:-true}
+      APPROVAL_MODE: ${APPROVAL_MODE:-manual}
     ports:
       - "127.0.0.1:${API_SERVER_PORT:-8642}:${API_SERVER_PORT:-8642}"
     volumes:
-      - hermes_home:/root/.hermes
+      - hermes_home:/home/hermes/.hermes
       - ./workspace:/workspace
     stdin_open: true
     tty: true
@@ -556,6 +633,34 @@ services:
 volumes:
   hermes_home:
 '@
+    if ($GpuDevices) {
+      $composeFile = Join-Path $InstallDir 'docker-compose.yml'
+      $content = Get-Content $composeFile -Raw
+      $gpuBlock = if ($GpuDevices -eq 'all') {
+@'
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+'@
+      } else {
+@"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              device_ids: ["$GpuDevices"]
+              capabilities: [gpu]
+"@
+      }
+      $content = $content -replace '(?m)^    command: \[', "$gpuBlock`$&"
+      Set-Content -Path $composeFile -Value $content -Encoding UTF8 -NoNewline
+    }
 
 Safe-Write 'bin/hades.ps1' @'
 param([string]$Command='help')
@@ -573,9 +678,77 @@ switch ($Command) {
   'update' { docker compose build --pull; docker compose up -d }
   'down' { docker compose down }
   'reset' { docker compose down -v }
+  'backup' {
+    $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
+    $dest = Join-Path (Get-Location) 'backups'
+    New-Item -ItemType Directory -Force -Path $dest | Out-Null
+    $finalFile = Join-Path $dest "hermes-data-$ts.tar.gz"
+    # Create tar inside container (absolute path to match bash format)
+    docker compose exec -T hermes tar czf /tmp/hades-backup.tar.gz /home/hermes/.hermes 2>$null
+    if ($LASTEXITCODE -eq 0) {
+      $cid = docker compose ps -q hermes 2>$null
+      if ($cid) {
+        docker cp "${cid}:/tmp/hades-backup.tar.gz" $finalFile 2>$null
+        docker compose exec hermes rm -f /tmp/hades-backup.tar.gz 2>$null
+        if ((Test-Path $finalFile) -and ((Get-Item $finalFile).Length -gt 0)) {
+          Write-Host "OK: Backup saved to $finalFile" -ForegroundColor Green
+          return
+        }
+      }
+    }
+    # Fallback: backup host config only
+    Copy-Item .env "$dest/env-$ts.bak" -Force
+    Copy-Item docker-compose.yml "$dest/docker-compose-$ts.yml" -Force
+    Write-Host "WARN: Cannot reach container; backed up host config only." -ForegroundColor Yellow
+  }
+  'restore' {
+    $src = $args[0]
+    if (-not $src) { Write-Host "Usage: hades restore <backup-file>"; return }
+    if (-not (Test-Path $src)) { Write-Host "ERROR: Backup not found: $src" -ForegroundColor Red; return }
+    $state = docker compose ps --format '{{.State}}' 2>$null
+    if ($LASTEXITCODE -ne 0 -or $state -ne 'running') { Write-Host "ERROR: Container is not running. Start it with 'hades start' first." -ForegroundColor Red; return }
+    $cid = docker compose ps -q hermes 2>$null
+    if (-not $cid) { Write-Host "ERROR: Cannot determine container ID." -ForegroundColor Red; return }
+    $tmpDir = Join-Path $env:TEMP "hades-restore-$([IO.Path]::GetRandomFileName())"
+    New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
+    tar xzf $src -C $tmpDir
+    # Stage tar into container via docker cp (handles binary correctly)
+    docker compose exec -T hermes mkdir -p /tmp/hades-restore 2>$null
+    if (Test-Path "$tmpDir/root/.hermes") {
+      # Old-format backup: /root/.hermes/...
+      docker cp $src "${cid}:/tmp/hades-restore/backup.tar.gz"
+      if ($LASTEXITCODE -ne 0) { Remove-Item -Recurse -Force $tmpDir; Write-Host "ERROR: Failed to copy backup to container." -ForegroundColor Red; return }
+      docker compose exec -T hermes bash -c "mkdir -p /home/hermes/.hermes && tar xzf /tmp/hades-restore/backup.tar.gz -C /home/hermes/.hermes --strip-components=2 && rm -rf /tmp/hades-restore"
+      if ($LASTEXITCODE -ne 0) { Remove-Item -Recurse -Force $tmpDir; Write-Host "ERROR: Failed to extract backup inside container." -ForegroundColor Red; return }
+    } else {
+      # New-format backup: tar at root
+      docker cp $src "${cid}:/tmp/hades-restore/backup.tar.gz"
+      if ($LASTEXITCODE -ne 0) { Remove-Item -Recurse -Force $tmpDir; Write-Host "ERROR: Failed to copy backup to container." -ForegroundColor Red; return }
+      docker compose exec -T hermes bash -c "tar xzf /tmp/hades-restore/backup.tar.gz -C / && rm -rf /tmp/hades-restore"
+      if ($LASTEXITCODE -ne 0) { Remove-Item -Recurse -Force $tmpDir; Write-Host "ERROR: Failed to extract backup inside container." -ForegroundColor Red; return }
+    }
+    Remove-Item -Recurse -Force $tmpDir
+    Write-Host "OK: Restored from $src" -ForegroundColor Green
+    docker compose restart hermes
+  }
+  'check' {
+    $exitCode = 0
+    $state = docker compose ps --format '{{.State}}' 2>$null
+    if ($LASTEXITCODE -ne 0 -or $state -ne 'running') { Write-Host "FAIL: container not running" -ForegroundColor Red; $exitCode = 1 }
+    $envContent = Get-Content .env -ErrorAction SilentlyContinue
+    $port = ($envContent | Where-Object {$_ -like 'API_SERVER_PORT=*'}) -replace 'API_SERVER_PORT=',''
+    if (-not $port) { $port = '8642' }
+    try {
+      Invoke-WebRequest -Uri "http://127.0.0.1:$port/health" -UseBasicParsing -TimeoutSec 5 | Out-Null
+      Write-Host "OK: healthcheck endpoint reachable" -ForegroundColor Green
+    } catch {
+      Write-Host "FAIL: healthcheck endpoint unreachable" -ForegroundColor Red; $exitCode = 1
+    }
+    if ($exitCode -eq 0) { Write-Host "OK: All checks passed" -ForegroundColor Green } else { docker compose logs --tail 20 hermes }
+  }
   'url' { $envfile=Get-Content .env; ($envfile | Where-Object {$_ -like 'API_SERVER_PORT=*'}) -replace 'API_SERVER_PORT=','' | ForEach-Object { "http://localhost:$_" } }
   'key' { (Get-Content .env | Where-Object {$_ -like 'API_SERVER_KEY=*'}) -replace 'API_SERVER_KEY=','' }
-  default { Write-Host 'Commands: start stop restart status logs cli shell build update down reset url key' }
+  default { Write-Host 'Commands: start stop restart status logs cli shell build update down reset backup restore check url key' }
 }
 '@
 
@@ -620,7 +793,21 @@ if ($SkipBuild) {
   } else {
     Log 'Building Docker image. Add -Browser for Playwright/Chromium (~450 MB extra, default: skip).'
   }
-  docker compose build
+  Log "Attempting to pull prebuilt image — will try multiple tags..."
+  $pulled = $false
+  foreach ($pullTag in @("v$Version", "hermes-$HermesVersion", "latest")) {
+    $pullResult = docker pull "ghcr.io/lunaticbugbear/hades-hermes-agent:$pullTag" 2>&1
+    if ($LASTEXITCODE -eq 0) {
+      Ok "Prebuilt image pull succeeded (tag: $pullTag) — skipping local build."
+      docker tag "ghcr.io/lunaticbugbear/hades-hermes-agent:$pullTag" "local/hermes-agent:latest"
+      $pulled = $true
+      break
+    }
+  }
+  if (-not $pulled) {
+    Log 'No prebuilt image available. Building locally...'
+    docker compose build
+  }
   if (-not $NoStart) {
     docker compose up -d
     docker compose ps

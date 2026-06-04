@@ -2,7 +2,16 @@
 # Hades — robust version
 set -Eeuo pipefail
 
-INSTALL_DIR="${HADES_HOME:-$HOME/.hades}"
+INSTALL_DIR=""
+
+# Auto-detect install directory
+if [[ -n "${HADES_HOME:-}" ]]; then
+  INSTALL_DIR="$HADES_HOME"
+elif [[ -d "/usr/local/lib/hades" ]] && [[ "$(id -u)" -eq 0 ]]; then
+  INSTALL_DIR="/usr/local/lib/hades"
+else
+  INSTALL_DIR="${HOME:-/root}/.hades"
+fi
 REMOVE_FILES="${REMOVE_FILES:-0}"
 REMOVE_DATA="${REMOVE_DATA:-0}"
 

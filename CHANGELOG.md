@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `APPROVAL_MODE` env var for tool execution control (manual=ask before each tool, auto=execute freely). Set via `--approval-mode` / `-ApprovalMode` or `APPROVAL_MODE` env. Default: manual.
+- Prebuilt Docker image on `ghcr.io/lunaticbugbear/hades-hermes-agent` — installer attempts automatic pull before falling back to local build. Multi-arch (linux/amd64 + linux/arm64).
+- Config auto-sync on restart — bootstrap now always regenerates `.env` and `config.yaml` from current host env vars using md5 hash comparison to avoid unnecessary writes.
+- Cosign keyless signing of all release artifacts (install.sh, install.ps1, uninstall.sh, uninstall.ps1, SHA256SUMS, sbom.spdx.json) with Rekor transparency log timestamping.
+- Cosign-signed container images pushed to ghcr.io during release.
+- Trivy vulnerability scan (CRITICAL/HIGH severity) in CI on every `main` push.
+- Integration tests in CI: REST API `/v1/models` endpoint check, tools list inside container, config.yaml existence, approval mode flag test.
+- GPU passthrough support — `--gpus` flag (install.sh) / `-GpuDevices` parameter (install.ps1) enables NVIDIA GPU access for local model inference. Uses `deploy.resources.reservations.devices` in docker-compose.yml.
+- Windows helper scripts: `bin/hades.ps1` (PowerShell) and `bin/hades.cmd` (CMD wrapper) generated alongside `bin/hades` during Windows installs.
+- Documented `GATEWAY_ALLOW_ALL_USERS` setting with security guidance in `.env.template`.
+
+### Changed
+- CI smoke job now uses Docker Buildx caching (`type=gha`) for faster builds.
+- docker-compose.yml now explicitly passes `GATEWAY_ALLOW_ALL_USERS` and `APPROVAL_MODE` environment variables to container.
+- `.env.template` extended with `APPROVAL_MODE`, `GPU_DEVICES`, and expanded `GATEWAY_ALLOW_ALL_USERS` documentation.
+- `docs/ARCHITECTURE.md` updated to include prebuilt image flow, config auto-sync lifecycle, and Windows helper script generation.
+
+### Fixed
+- `hades backup` no longer creates an empty .tar.gz on failure — writes to temp file first, removes on fallback, only finalizes on success.
+- `hades restore` now checks container is running before attempting restore, with a clear error message.
+- `hades restore` old-format backup (root/.hermes/...) now correctly uses `--strip-components=2` so data lands in the right path.
+- bootstrap.sh now creates `.hermes_initialized` sentinel file after migration to prevent re-migration.
+- install.ps1 `Resolve-Port` now validates port range (1-65535) before checking contention.
+- install.ps1 `bin/hades.ps1` now includes `backup`, `restore`, and `check` commands — parity with the bash helper.
+- docs/RELEASE_PROCESS.md replaced brittle line numbers for `ARG HERMES_VERSION` with a search-based instruction.
+- ROADMAP.md removed stale "Keep signatures/backstops under planned work" line — cosign shipped in v1.4.0.
+- docs/FAQ.md `GATEWAY_ALLOW_ALL_USERS` entry now links to Hermes Gateway docs for user mapping setup.
+- `install.ps1` docker-compose.yml template now includes `environment` block for `GATEWAY_ALLOW_ALL_USERS` and `APPROVAL_MODE` (was missing, unlike install.sh).
+- `README.md` architecture diagram corrected from `/root/.hermes` to `/home/hermes/.hermes`.
+- `uninstall.sh` now auto-detects root install path (`/usr/local/lib/hades`) when running as root, instead of always using `$HOME/.hades`.
+- `install.ps1` custom provider now correctly sets default model to `custom-model` on interactive run, matching install.sh behavior.
+- `hades check` port extraction in bash helper replaced fragile grep/sed with robust `sed -n 's/^...//p'` to avoid false negatives from comments.
+- `hades restore` in both helpers now errors out on failed `docker cp` or `docker exec` instead of silently continuing.
+- `uninstall.ps1` now checks `docker compose version` availability before calling `docker compose down`, matching the bash uninstaller.
+- `assets/generate_social_preview.py` replaced hardcoded `/home/idx-332/hdi/assets` path with `Path(__file__).parent.resolve()` so the script works for any contributor.
+- `install.ps1` `$GoogleApiKey` parameter now falls back to `$env:GEMINI_API_KEY` when `$env:GOOGLE_API_KEY` is unset, matching install.sh behavior.
+
 ## [1.4.2] - 2026-06-01
 
 ### Changed

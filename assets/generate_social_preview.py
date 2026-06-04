@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import List, Tuple
 import struct, zlib
 
-out = Path('/home/idx-332/hdi/assets')
+out = Path(__file__).parent.resolve()
 out.mkdir(parents=True, exist_ok=True)
 
 W, H = 1280, 640
